@@ -10,14 +10,14 @@
     "Other"
   ],
   "activationEvents": [
-    "onCommand:micropython-esp32.helloVSCode"
+    "onCommand:micropython-esp32.openSerialPort"
   ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "micropython-esp32.helloVSCode",
-        "title": "Hello VS Code"
+        "command": "micropython-esp32.openSerialPort",
+        "title": "Open Serial Port"
       }
     ]
   },

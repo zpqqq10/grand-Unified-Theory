@@ -1,4 +1,4 @@
 export default interface Port {
-  read(size: number): string | null;
-  write(data: string): boolean;
+  read(size: number): Promise<string>;
+  write(data: string): Promise<void>;
 }

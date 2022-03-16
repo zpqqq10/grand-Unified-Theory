@@ -1,10 +1,11 @@
+import * as vscode from 'vscode';
 import Port from './port';
 import { SerialPort } from 'serialport';
 
 export interface SerialOptions {
   type: 'serial';
   path: string;
-  baudRate: number;
+  baudRate: string;
 }
 
 export default class Serial implements Port {
@@ -13,20 +14,38 @@ export default class Serial implements Port {
   constructor(options: SerialOptions) {
     this.serialport = new SerialPort({
       path: options.path,
-      baudRate: options.baudRate,
+      baudRate: parseInt(options.baudRate),
     });
     this.serialport.setEncoding('utf8');
-    this.serialport.on('error', (err: Error) => console.log(err));
+    this.serialport.on('error', (err) =>
+      vscode.window.showErrorMessage(err.message),
+    );
   }
 
-  read(size: number): string | null {
-    const data: string | null = this.serialport.read(size);
-    console.log('serial read', data);
-    return data;
+  read(size: number): Promise<string> {
+    return new Promise((resolve) => {
+      for (;;) {
+        const data = this.serialport.read(size);
+        if (data !== null) {
+          console.log('serial read', data);
+          resolve(data);
+          return;
+        }
+      }
+    });
   }
 
-  write(data: string): boolean {
-    console.log('serial write', data);
-    return this.serialport.write(data);
+  write(data: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this.serialport.write(data);
+      this.serialport.drain((err) => {
+        if (err) {
+          reject(err);
+        } else {
+          console.log('serial write', data);
+          resolve();
+        }
+      });
+    });
   }
 }

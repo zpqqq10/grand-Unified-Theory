@@ -14,11 +14,19 @@ export default class WebSock implements Port {
     this.socket = io(options.url);
   }
 
+  get length(): number {
+    return 0;
+  }
+
   read(size: number): Promise<string> {
     return new Promise((resolve, reject) => reject());
   }
 
   write(data: string): Promise<void> {
+    return new Promise((resolve, reject) => reject());
+  }
+
+  close(): Promise<void> {
     return new Promise((resolve, reject) => reject());
   }
 }

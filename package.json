@@ -10,16 +10,33 @@
     "Other"
   ],
   "activationEvents": [
-    "onCommand:micropython-esp32.openSerialPort"
+    "onCommand:micropython-esp32.connectESP32",
+    "onCommand:micropython-esp32.disconnectESP32"
   ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "micropython-esp32.openSerialPort",
-        "title": "Open Serial Port"
+        "command": "micropython-esp32.connectESP32",
+        "title": "Connect to ESP32"
+      },
+      {
+        "command": "micropython-esp32.disconnectESP32",
+        "title": "Disconnect to ESP32"
       }
-    ]
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "micropython-esp32.connectESP32",
+          "when": "!micropython-esp32.connected"
+        },
+        {
+          "command": "micropython-esp32.disconnectESP32",
+          "when": "micropython-esp32.connected"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "yarn run compile",

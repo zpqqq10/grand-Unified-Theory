@@ -10,6 +10,7 @@ export interface SerialOptions {
 
 export default class Serial implements Port {
   private serialport: SerialPort;
+  public readonly address: string;
 
   constructor(options: SerialOptions) {
     this.serialport = new SerialPort({
@@ -20,6 +21,7 @@ export default class Serial implements Port {
     this.serialport.on('error', (err) =>
       vscode.window.showErrorMessage(err.message),
     );
+    this.address = `${options.path}, baud rate ${options.baudRate}`;
   }
 
   get length(): number {
@@ -40,7 +42,7 @@ export default class Serial implements Port {
           setTimeout(read, 1);
         }
       };
-      setTimeout(read, 1);
+      read();
     });
   }
 

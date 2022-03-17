@@ -30,6 +30,10 @@ export default class Connection {
     this.type = options.type;
   }
 
+  get address() {
+    return this.port.address;
+  }
+
   private async readUntil(suffix: string): Promise<string> {
     for (let data = ''; ; ) {
       data += await this.port.read(1);
@@ -37,22 +41,6 @@ export default class Connection {
         return data;
       }
     }
-  }
-
-  private async exec(command: string): Promise<Result> {
-    await this.readUntil('>');
-    await this.port.write(command + '\x04');
-    await this.readUntil('OK');
-    const data = await this.readUntil('\x04');
-    const err = await this.readUntil('\x04');
-    return {
-      data: data.slice(0, data.length - 1),
-      err: err.slice(0, err.length - 1),
-    };
-  }
-
-  private async eval(expression: string): Promise<Result> {
-    return await this.exec(`print(${expression})`);
   }
 
   async init(): Promise<void> {
@@ -65,6 +53,25 @@ export default class Connection {
     await this.port.write('\x04');
     await this.readUntil('MPY: soft reboot\r\n');
     await this.readUntil('raw REPL; CTRL-B to exit\r\n');
+  }
+
+  async exec(command: string): Promise<Result> {
+    if (command === '') {
+      return { data: '', err: '' };
+    }
+    await this.readUntil('>');
+    await this.port.write(command + '\x04');
+    await this.readUntil('OK');
+    const data = await this.readUntil('\x04');
+    const err = await this.readUntil('\x04');
+    return {
+      data: data.slice(0, data.length - 1),
+      err: err.slice(0, err.length - 1),
+    };
+  }
+
+  async eval(expression: string): Promise<Result> {
+    return await this.exec(`print(${expression})`);
   }
 
   async close(): Promise<void> {

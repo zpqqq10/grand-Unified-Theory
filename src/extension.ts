@@ -3,7 +3,7 @@
 import * as vscode from 'vscode';
 import Connection from './connection';
 
-export let connection: Connection;
+export let connection: Connection | undefined = undefined;
 
 // this method is called when your extension is activated
 // your extension is activated the very first time the command is executed
@@ -14,38 +14,47 @@ export function activate(context: vscode.ExtensionContext) {
     'Congratulations, your extension "micropython-esp32" is now active!',
   );
 
-  const openSerialPort: () => Promise<void> = async () => {
+  const statusBarItem = vscode.window.createStatusBarItem();
+  const outputChannel = vscode.window.createOutputChannel('MicroPython-ESP32');
+
+  statusBarItem.name = statusBarItem.tooltip = 'ESP32 Connection';
+  statusBarItem.command = 'micropython-esp32.connectESP32';
+  statusBarItem.text = 'Disconnected';
+  statusBarItem.show();
+
+  const openSerialPort: () => Promise<Connection | undefined> = async () => {
     const path = await vscode.window.showInputBox({ title: 'Input port path' });
-    if (path !== undefined) {
-      const baudRate = await vscode.window.showInputBox({
-        title: 'Input baud rate',
-        value: '115200',
-      });
-      if (baudRate !== undefined) {
-        connection = new Connection({ type: 'serial', path, baudRate });
-        return;
-      }
+    if (path === undefined) {
+      return;
     }
-    vscode.window.showInformationMessage('Cancelled.');
+    const baudRate = await vscode.window.showInputBox({
+      title: 'Input baud rate',
+      value: '115200',
+    });
+    if (baudRate === undefined) {
+      return;
+    }
+    return new Connection({ type: 'serial', path, baudRate });
   };
 
-  const openWebSock: () => Promise<void> = async () => {
+  const openWebSock: () => Promise<Connection | undefined> = async () => {
     const url = await vscode.window.showInputBox({ title: 'Input URL' });
-    if (url !== undefined) {
-      const password = await vscode.window.showInputBox({
-        title: 'Input password',
-        password: true,
-      });
-      if (password !== undefined) {
-        connection = new Connection({ type: 'websock', url, password });
-        return;
-      }
+    if (url === undefined) {
+      return;
     }
-    vscode.window.showInformationMessage('Cancelled.');
+    const password = await vscode.window.showInputBox({
+      title: 'Input password',
+      password: true,
+    });
+    if (password === undefined) {
+      return;
+    }
+    return new Connection({ type: 'websock', url, password });
   };
 
   const connectESP32: () => Promise<void> = async () => {
     try {
+      await disconnectESP32();
       const type = await vscode.window.showQuickPick(
         [
           { label: 'serial', description: 'SerialPort' },
@@ -55,30 +64,53 @@ export function activate(context: vscode.ExtensionContext) {
           title: 'Choose connection type',
         },
       );
-      if (type !== undefined) {
-        switch (type?.label) {
-          case 'serial': {
-            await openSerialPort();
-            break;
-          }
-          case 'websock': {
-            await openWebSock();
-            break;
-          }
-          default: {
-            throw new Error('Unknown connection type.');
-          }
-        }
-        await connection.init();
-        await vscode.commands.executeCommand(
-          'setContext',
-          'micropython-esp32.connected',
-          true,
-        );
-        vscode.window.showInformationMessage('Connected.');
+      if (type === undefined) {
         return;
       }
-      vscode.window.showInformationMessage('Cancelled.');
+      switch (type.label) {
+        case 'serial': {
+          connection = await openSerialPort();
+          break;
+        }
+        case 'websock': {
+          connection = await openWebSock();
+          break;
+        }
+        default: {
+          throw new Error('Unknown connection type.');
+        }
+      }
+      if (connection === undefined) {
+        return;
+      }
+      await connection.init();
+      await vscode.commands.executeCommand(
+        'setContext',
+        'micropython-esp32.connected',
+        true,
+      );
+      statusBarItem.text = `Connected ${connection.address}`;
+    } catch (err: any) {
+      vscode.window.showErrorMessage(err.message);
+    }
+  };
+
+  const executePythonCommand: () => Promise<void> = async () => {
+    try {
+      if (connection === undefined) {
+        return;
+      }
+      const command = await vscode.window.showInputBox({
+        title: 'Input Python command',
+      });
+      if (command === undefined) {
+        return;
+      }
+      outputChannel.clear();
+      outputChannel.show();
+      const { data, err } = await connection.exec(command);
+      outputChannel.appendLine(data);
+      outputChannel.appendLine(err);
     } catch (err: any) {
       vscode.window.showErrorMessage(err.message);
     }
@@ -86,13 +118,17 @@ export function activate(context: vscode.ExtensionContext) {
 
   const disconnectESP32: () => Promise<void> = async () => {
     try {
+      if (connection === undefined) {
+        return;
+      }
       await connection.close();
       await vscode.commands.executeCommand(
         'setContext',
         'micropython-esp32.connected',
         false,
       );
-      vscode.window.showInformationMessage('Disconnected.');
+      statusBarItem.text = 'Disconnected';
+      connection = undefined;
     } catch (err: any) {
       vscode.window.showErrorMessage(err.message);
     }
@@ -102,9 +138,15 @@ export function activate(context: vscode.ExtensionContext) {
   // Now provide the implementation of the command with registerCommand
   // The commandId parameter must match the command field in package.json
   context.subscriptions.push(
+    statusBarItem,
+    outputChannel,
     vscode.commands.registerCommand(
       'micropython-esp32.connectESP32',
       connectESP32,
+    ),
+    vscode.commands.registerCommand(
+      'micropython-esp32.executePythonCommand',
+      executePythonCommand,
     ),
     vscode.commands.registerCommand(
       'micropython-esp32.disconnectESP32',

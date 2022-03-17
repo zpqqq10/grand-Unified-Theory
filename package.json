@@ -11,6 +11,7 @@
   ],
   "activationEvents": [
     "onCommand:micropython-esp32.connectESP32",
+    "onCommand:micropython-esp32.executePythonCommand",
     "onCommand:micropython-esp32.disconnectESP32"
   ],
   "main": "./out/extension.js",
@@ -19,6 +20,10 @@
       {
         "command": "micropython-esp32.connectESP32",
         "title": "Connect to ESP32"
+      },
+      {
+        "command": "micropython-esp32.executePythonCommand",
+        "title": "Execute Python Command"
       },
       {
         "command": "micropython-esp32.disconnectESP32",
@@ -30,6 +35,10 @@
         {
           "command": "micropython-esp32.connectESP32",
           "when": "!micropython-esp32.connected"
+        },
+        {
+          "command": "micropython-esp32.executePythonCommand",
+          "when": "micropython-esp32.connected"
         },
         {
           "command": "micropython-esp32.disconnectESP32",

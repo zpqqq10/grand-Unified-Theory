@@ -9,9 +9,11 @@ export interface WebSockOptions {
 
 export default class WebSock implements Port {
   private socket: Socket;
+  public readonly address: string;
 
   constructor(options: WebSockOptions) {
     this.socket = io(options.url);
+    this.address = options.url;
   }
 
   get length(): number {

@@ -9,18 +9,18 @@ export interface WebSockOptions {
 
 export default class WebSock implements Port {
   private socket: Socket;
-  public readonly address: string;
+  readonly address: string;
 
   constructor(options: WebSockOptions) {
     this.socket = io(options.url);
     this.address = options.url;
   }
 
-  get length(): number {
+  get readableLength(): number {
     return 0;
   }
 
-  read(size: number): Promise<string> {
+  read(size: number, timeout?: number): Promise<string> {
     return new Promise((resolve, reject) => reject());
   }
 

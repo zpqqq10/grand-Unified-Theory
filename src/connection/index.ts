@@ -45,8 +45,8 @@ export default class Connection {
 
   async init(): Promise<void> {
     await this.port.write('\x03\x03');
-    for (; this.port.length > 0; ) {
-      await this.port.read(this.port.length);
+    for (; this.port.readableLength > 0; ) {
+      await this.port.read(this.port.readableLength);
     }
     await this.port.write('\x01');
     await this.readUntil('raw REPL; CTRL-B to exit\r\n');

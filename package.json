@@ -10,9 +10,7 @@
     "Other"
   ],
   "activationEvents": [
-    "onCommand:micropython-esp32.connectESP32",
-    "onCommand:micropython-esp32.executePythonCommand",
-    "onCommand:micropython-esp32.disconnectESP32"
+    "onCommand:micropython-esp32.connectESP32"
   ],
   "main": "./out/extension.js",
   "contributes": {

@@ -10,7 +10,7 @@ export interface SerialOptions {
 
 export default class Serial implements Port {
   private serialport: SerialPort;
-  public readonly address: string;
+  readonly address: string;
 
   constructor(options: SerialOptions) {
     this.serialport = new SerialPort({
@@ -24,19 +24,19 @@ export default class Serial implements Port {
     this.address = `${options.path}, baud rate ${options.baudRate}`;
   }
 
-  get length(): number {
+  get readableLength(): number {
     return this.serialport.readableLength;
   }
 
-  read(size: number): Promise<string> {
+  read(size: number, timeout?: number): Promise<string> {
     return new Promise((resolve, reject) => {
-      let counter = 10000;
+      let counter = timeout;
       const read = () => {
         const data = this.serialport.read(size);
         if (data !== null) {
           console.log('serial read', data);
           resolve(data);
-        } else if (--counter === 0) {
+        } else if (counter !== undefined && --counter <= 0) {
           reject('Read timed out.');
         } else {
           setTimeout(read, 1);

@@ -2,6 +2,7 @@
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
 import Connection from './connection';
+import ESP32FS from './fileSystem';
 
 export let connection: Connection | undefined = undefined;
 
@@ -89,6 +90,12 @@ export function activate(context: vscode.ExtensionContext) {
         'micropython-esp32.connected',
         true,
       );
+      console.log(
+        vscode.workspace.updateWorkspaceFolders(0, 0, {
+          name: 'ESP32FS',
+          uri: vscode.Uri.parse('esp32fs:/'),
+        }),
+      );
       statusBarItem.text = `Connected ${connection.address}`;
     } catch (err: any) {
       vscode.window.showErrorMessage(err.message);
@@ -106,11 +113,15 @@ export function activate(context: vscode.ExtensionContext) {
       if (command === undefined) {
         return;
       }
-      outputChannel.clear();
       outputChannel.show();
       const { data, err } = await connection.exec(command);
-      outputChannel.appendLine(data);
-      outputChannel.appendLine(err);
+      if (data) {
+        outputChannel.appendLine(data);
+      }
+      if (err) {
+        outputChannel.appendLine(err);
+      }
+      outputChannel.appendLine('> ----- <');
     } catch (err: any) {
       vscode.window.showErrorMessage(err.message);
     }
@@ -127,12 +138,15 @@ export function activate(context: vscode.ExtensionContext) {
         'micropython-esp32.connected',
         false,
       );
+      console.log(vscode.workspace.updateWorkspaceFolders(0, 1));
       statusBarItem.text = 'Disconnected';
       connection = undefined;
     } catch (err: any) {
       vscode.window.showErrorMessage(err.message);
     }
   };
+
+  const esp32Fs = new ESP32FS();
 
   // The command has been defined in the package.json file
   // Now provide the implementation of the command with registerCommand
@@ -152,6 +166,7 @@ export function activate(context: vscode.ExtensionContext) {
       'micropython-esp32.disconnectESP32',
       disconnectESP32,
     ),
+    vscode.workspace.registerFileSystemProvider('esp32fs', esp32Fs),
   );
 }
 

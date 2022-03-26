@@ -19,9 +19,16 @@ export function activate(context: vscode.ExtensionContext) {
   const outputChannel = vscode.window.createOutputChannel('MicroPython-ESP32');
 
   statusBarItem.name = statusBarItem.tooltip = 'ESP32 Connection';
-  statusBarItem.command = 'micropython-esp32.connectESP32';
+  statusBarItem.command = 'micropython-esp32.connect';
   statusBarItem.text = 'Disconnected';
   statusBarItem.show();
+
+  const initWorkspace: () => void = () => {
+    vscode.workspace.updateWorkspaceFolders(0, 0, {
+      name: 'ESP32 File System',
+      uri: vscode.Uri.parse('esp32fs:/'),
+    });
+  };
 
   const openSerialPort: () => Promise<Connection | undefined> = async () => {
     const path = await vscode.window.showInputBox({ title: 'Input port path' });
@@ -35,7 +42,20 @@ export function activate(context: vscode.ExtensionContext) {
     if (baudRate === undefined) {
       return;
     }
-    return new Connection({ type: 'serial', path, baudRate });
+    return new Connection({
+      type: 'serial',
+      path,
+      baudRate,
+      onError: (err) => {
+        vscode.window.showErrorMessage(err.message);
+        vscode.commands.executeCommand(
+          'setContext',
+          'micropython-esp32.connected',
+          false,
+        );
+        connection = undefined;
+      },
+    });
   };
 
   const openWebSock: () => Promise<Connection | undefined> = async () => {
@@ -50,12 +70,25 @@ export function activate(context: vscode.ExtensionContext) {
     if (password === undefined) {
       return;
     }
-    return new Connection({ type: 'websock', url, password });
+    return new Connection({
+      type: 'websock',
+      url,
+      password,
+      onError: (err) => {
+        vscode.window.showErrorMessage(err.message);
+        vscode.commands.executeCommand(
+          'setContext',
+          'micropython-esp32.connected',
+          false,
+        );
+        connection = undefined;
+      },
+    });
   };
 
-  const connectESP32: () => Promise<void> = async () => {
+  const connect: () => Promise<void> = async () => {
     try {
-      await disconnectESP32();
+      await disconnect();
       const type = await vscode.window.showQuickPick(
         [
           { label: 'serial', description: 'SerialPort' },
@@ -85,24 +118,18 @@ export function activate(context: vscode.ExtensionContext) {
         return;
       }
       await connection.init();
-      await vscode.commands.executeCommand(
+      statusBarItem.text = `Connected ${connection.address}`;
+      vscode.commands.executeCommand(
         'setContext',
         'micropython-esp32.connected',
         true,
       );
-      console.log(
-        vscode.workspace.updateWorkspaceFolders(0, 0, {
-          name: 'ESP32FS',
-          uri: vscode.Uri.parse('esp32fs:/'),
-        }),
-      );
-      statusBarItem.text = `Connected ${connection.address}`;
     } catch (err: any) {
       vscode.window.showErrorMessage(err.message);
     }
   };
 
-  const executePythonCommand: () => Promise<void> = async () => {
+  const executeCommand: () => Promise<void> = async () => {
     try {
       if (connection === undefined) {
         return;
@@ -116,9 +143,11 @@ export function activate(context: vscode.ExtensionContext) {
       outputChannel.show();
       const { data, err } = await connection.exec(command);
       if (data) {
+        outputChannel.appendLine('> Output <');
         outputChannel.appendLine(data);
       }
       if (err) {
+        outputChannel.appendLine('> Error <');
         outputChannel.appendLine(err);
       }
       outputChannel.appendLine('> ----- <');
@@ -127,19 +156,18 @@ export function activate(context: vscode.ExtensionContext) {
     }
   };
 
-  const disconnectESP32: () => Promise<void> = async () => {
+  const disconnect: () => Promise<void> = async () => {
     try {
       if (connection === undefined) {
         return;
       }
       await connection.close();
-      await vscode.commands.executeCommand(
+      statusBarItem.text = 'Disconnected';
+      vscode.commands.executeCommand(
         'setContext',
         'micropython-esp32.connected',
         false,
       );
-      console.log(vscode.workspace.updateWorkspaceFolders(0, 1));
-      statusBarItem.text = 'Disconnected';
       connection = undefined;
     } catch (err: any) {
       vscode.window.showErrorMessage(err.message);
@@ -155,18 +183,18 @@ export function activate(context: vscode.ExtensionContext) {
     statusBarItem,
     outputChannel,
     vscode.commands.registerCommand(
-      'micropython-esp32.connectESP32',
-      connectESP32,
+      'micropython-esp32.initWorkspace',
+      initWorkspace,
     ),
+    vscode.commands.registerCommand('micropython-esp32.connect', connect),
     vscode.commands.registerCommand(
-      'micropython-esp32.executePythonCommand',
-      executePythonCommand,
+      'micropython-esp32.executeCommand',
+      executeCommand,
     ),
-    vscode.commands.registerCommand(
-      'micropython-esp32.disconnectESP32',
-      disconnectESP32,
-    ),
-    vscode.workspace.registerFileSystemProvider('esp32fs', esp32Fs),
+    vscode.commands.registerCommand('micropython-esp32.disconnect', disconnect),
+    vscode.workspace.registerFileSystemProvider('esp32fs', esp32Fs, {
+      isCaseSensitive: true,
+    }),
   );
 }
 

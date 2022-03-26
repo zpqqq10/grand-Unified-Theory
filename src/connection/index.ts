@@ -10,71 +10,126 @@ interface Result {
 }
 
 export default class Connection {
-  private port: Port;
-  public readonly type: string;
+  private _port: Port;
+  private _blocking: boolean;
+  readonly type: string;
 
   constructor(options: ConnectionOptions) {
     switch (options.type) {
       case 'serial': {
-        this.port = new Serial(options);
+        this._port = new Serial(options);
         break;
       }
       case 'websock': {
-        this.port = new WebSock(options);
+        this._port = new WebSock(options);
         break;
       }
       default: {
         throw new Error('Unknown connection type.');
       }
     }
+    this._blocking = false;
     this.type = options.type;
   }
 
   get address() {
-    return this.port.address;
+    return this._port.address;
   }
 
-  private async readUntil(suffix: string): Promise<string> {
+  /**
+   * Block the port to ensure at most one ongoing operation.
+   */
+  private _block(): Promise<void> {
+    return new Promise((resolve) => {
+      const lock = () => {
+        if (!this._blocking) {
+          this._blocking = true;
+          resolve();
+        } else {
+          setTimeout(lock, 1);
+        }
+      };
+      lock();
+    });
+  }
+
+  /**
+   * Read bytes from the port until a certain string is met.
+   * @param suffix The string to stop read.
+   * @returns The bytes read from the port.
+   */
+  private async _readUntil(suffix: string): Promise<string> {
     for (let data = ''; ; ) {
-      data += await this.port.read(1);
+      data += await this._port.read(1);
       if (data.endsWith(suffix)) {
+        console.log('serial read', data);
         return data;
       }
     }
   }
 
-  async init(): Promise<void> {
-    await this.port.write('\x03\x03');
-    for (; this.port.readableLength > 0; ) {
-      await this.port.read(this.port.readableLength);
+  private async _init(): Promise<void> {
+    await this._port.write('\x03\x03');
+    for (; this._port.readableLength > 0; ) {
+      await this._port.read(this._port.readableLength);
     }
-    await this.port.write('\x01');
-    await this.readUntil('raw REPL; CTRL-B to exit\r\n');
-    await this.port.write('\x04');
-    await this.readUntil('MPY: soft reboot\r\n');
-    await this.readUntil('raw REPL; CTRL-B to exit\r\n');
+    await this._port.write('\x01');
+    await this._readUntil('raw REPL; CTRL-B to exit\r\n');
+    await this._port.write('\x04');
+    await this._readUntil('MPY: soft reboot\r\n');
+    await this._readUntil('raw REPL; CTRL-B to exit\r\n');
+    await this._exec('import os');
   }
 
-  async exec(command: string): Promise<Result> {
+  /**
+   * Initialize the board.
+   */
+  async init(): Promise<void> {
+    await this._block();
+    await this._init();
+    this._blocking = false;
+  }
+
+  private async _exec(command: string): Promise<Result> {
     if (command === '') {
       return { data: '', err: '' };
     }
-    await this.readUntil('>');
-    await this.port.write(command + '\x04');
-    await this.readUntil('OK');
-    const data = await this.readUntil('\x04');
-    const err = await this.readUntil('\x04');
+    await this._readUntil('>');
+    await this._port.write(command + '\x04');
+    await this._readUntil('OK');
+    const data = await this._readUntil('\x04');
+    const err = await this._readUntil('\x04');
     return {
       data: data.slice(0, data.length - 1),
       err: err.slice(0, err.length - 1),
     };
   }
 
-  async eval(expression: string): Promise<Result> {
-    return await this.exec(`print(${expression})`);
+  /**
+   * Execute a command on the board.
+   * @param command The command to execute.
+   * @returns The execution result.
+   */
+  async exec(command: string): Promise<Result> {
+    await this._block();
+    const result = await this._exec(command);
+    this._blocking = false;
+    return result;
   }
 
+  /**
+   * Evalute the result of an expression.
+   * @param expression The expression to evaluate.
+   * @returns The evaluation result.
+   */
+  async eval(expression: string): Promise<Result> {
+    return await this.exec(`print(${expression},end='')`);
+  }
+
+  /**
+   * Close the port.
+   */
   async close(): Promise<void> {
-    await this.port.close();
+    await this._port.close();
   }
 }

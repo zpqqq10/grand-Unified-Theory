@@ -1,4 +1,3 @@
-import * as vscode from 'vscode';
 import Port from './port';
 import { SerialPort } from 'serialport';
 
@@ -6,35 +5,34 @@ export interface SerialOptions {
   type: 'serial';
   path: string;
   baudRate: string;
+  onError: (err: Error) => void;
 }
 
 export default class Serial implements Port {
-  private serialport: SerialPort;
+  private _serialport: SerialPort;
   readonly address: string;
 
   constructor(options: SerialOptions) {
-    this.serialport = new SerialPort({
+    this._serialport = new SerialPort({
       path: options.path,
       baudRate: parseInt(options.baudRate),
     });
-    this.serialport.setEncoding('utf8');
-    this.serialport.on('error', (err) =>
-      vscode.window.showErrorMessage(err.message),
-    );
+    this._serialport.setEncoding('utf8');
+    this._serialport.on('error', options.onError);
     this.address = `${options.path}, baud rate ${options.baudRate}`;
   }
 
   get readableLength(): number {
-    return this.serialport.readableLength;
+    return this._serialport.readableLength;
   }
 
   read(size: number, timeout?: number): Promise<string> {
     return new Promise((resolve, reject) => {
       let counter = timeout;
       const read = () => {
-        const data = this.serialport.read(size);
+        const data = this._serialport.read(size);
         if (data !== null) {
-          console.log('serial read', data);
+          // console.log('serial read', data);
           resolve(data);
         } else if (counter !== undefined && --counter <= 0) {
           reject('Read timed out.');
@@ -48,8 +46,8 @@ export default class Serial implements Port {
 
   write(data: string): Promise<void> {
     return new Promise((resolve, reject) => {
-      this.serialport.write(data);
-      this.serialport.drain((err) => {
+      this._serialport.write(data);
+      this._serialport.drain((err) => {
         if (err !== null) {
           reject(err);
         } else {
@@ -62,7 +60,7 @@ export default class Serial implements Port {
 
   close(): Promise<void> {
     return new Promise((resolve, reject) => {
-      this.serialport.close((err) => {
+      this._serialport.close((err) => {
         if (err !== null) {
           reject(err);
         } else {

@@ -10,37 +10,49 @@
     "Other"
   ],
   "activationEvents": [
-    "onCommand:micropython-esp32.connectESP32"
+    "onCommand:micropython-esp32.initWorkspace",
+    "onCommand:micropython-esp32.connect",
+    "onCommand:micropython-esp32.executeCommand",
+    "onCommand:micropython-esp32.disconnect",
+    "onFileSystem:esp32fs"
   ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "micropython-esp32.connectESP32",
+        "command": "micropython-esp32.initWorkspace",
+        "title": "Initialize ESP32 Workspace"
+      },
+      {
+        "command": "micropython-esp32.connect",
         "title": "Connect to ESP32"
       },
       {
-        "command": "micropython-esp32.executePythonCommand",
+        "command": "micropython-esp32.executeCommand",
         "title": "Execute Python Command"
       },
       {
-        "command": "micropython-esp32.disconnectESP32",
+        "command": "micropython-esp32.disconnect",
         "title": "Disconnect to ESP32"
       }
     ],
     "menus": {
       "commandPalette": [
         {
-          "command": "micropython-esp32.connectESP32",
-          "when": "!micropython-esp32.connected"
+          "command": "micropython-esp32.initWorkspace",
+          "when": "workbenchState != workspace"
         },
         {
-          "command": "micropython-esp32.executePythonCommand",
-          "when": "micropython-esp32.connected"
+          "command": "micropython-esp32.connect",
+          "when": "workbenchState == workspace && !micropython-esp32.connected"
         },
         {
-          "command": "micropython-esp32.disconnectESP32",
-          "when": "micropython-esp32.connected"
+          "command": "micropython-esp32.executeCommand",
+          "when": "workbenchState == workspace && micropython-esp32.connected"
+        },
+        {
+          "command": "micropython-esp32.disconnect",
+          "when": "workbenchState == workspace && micropython-esp32.connected"
         }
       ]
     }

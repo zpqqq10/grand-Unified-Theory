@@ -5,14 +5,15 @@ export interface WebSockOptions {
   type: 'websock';
   url: string;
   password: string;
+  onError: (err: Error) => void;
 }
 
 export default class WebSock implements Port {
-  private socket: Socket;
+  private _socket: Socket;
   readonly address: string;
 
   constructor(options: WebSockOptions) {
-    this.socket = io(options.url);
+    this._socket = io(options.url);
     this.address = options.url;
   }
 

@@ -13,27 +13,50 @@
     "onCommand:micropython-esp32.initWorkspace",
     "onCommand:micropython-esp32.connect",
     "onCommand:micropython-esp32.executeCommand",
+    "onCommand:micropython-esp32.executeFile",
     "onCommand:micropython-esp32.disconnect",
     "onFileSystem:esp32fs"
   ],
   "main": "./out/extension.js",
   "contributes": {
+    "breakpoints": [
+      {
+        "language": "python"
+      }
+    ],
     "commands": [
       {
         "command": "micropython-esp32.initWorkspace",
-        "title": "Initialize ESP32 Workspace"
+        "title": "Initialize ESP32 Workspace",
+        "category": "MicroPython-ESP32"
       },
       {
         "command": "micropython-esp32.connect",
-        "title": "Connect to ESP32"
+        "title": "Connect to ESP32",
+        "category": "MicroPython-ESP32"
       },
       {
         "command": "micropython-esp32.executeCommand",
-        "title": "Execute Python Command"
+        "title": "Execute Python Command",
+        "category": "MicroPython-ESP32"
+      },
+      {
+        "command": "micropython-esp32.executeFile",
+        "title": "Execute Python File",
+        "category": "MicroPython-ESP32",
+        "icon": "$(play)"
       },
       {
         "command": "micropython-esp32.disconnect",
-        "title": "Disconnect to ESP32"
+        "title": "Disconnect to ESP32",
+        "category": "MicroPython-ESP32"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "micropython-esp32.executeFile",
+        "key": "f9",
+        "when": "workbenchState == workspace && micropython-esp32.connected && resourceLangId == python"
       }
     ],
     "menus": {
@@ -51,8 +74,19 @@
           "when": "workbenchState == workspace && micropython-esp32.connected"
         },
         {
+          "command": "micropython-esp32.executeFile",
+          "when": "workbenchState == workspace && micropython-esp32.connected && resourceLangId == python"
+        },
+        {
           "command": "micropython-esp32.disconnect",
           "when": "workbenchState == workspace && micropython-esp32.connected"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "micropython-esp32.executeFile",
+          "group": "1_run",
+          "when": "workbenchState == workspace && micropython-esp32.connected && resourceLangId == python"
         }
       ]
     }

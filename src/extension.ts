@@ -30,7 +30,7 @@ export function activate(context: vscode.ExtensionContext) {
     });
   };
 
-  const openSerialPort: () => Promise<Connection | undefined> = async () => {
+  const _openSerialPort: () => Promise<Connection | undefined> = async () => {
     const path = await vscode.window.showInputBox({ title: 'Input port path' });
     if (path === undefined) {
       return;
@@ -58,7 +58,7 @@ export function activate(context: vscode.ExtensionContext) {
     });
   };
 
-  const openWebSock: () => Promise<Connection | undefined> = async () => {
+  const _openWebSock: () => Promise<Connection | undefined> = async () => {
     const url = await vscode.window.showInputBox({ title: 'Input URL' });
     if (url === undefined) {
       return;
@@ -103,11 +103,11 @@ export function activate(context: vscode.ExtensionContext) {
       }
       switch (type.label) {
         case 'serial': {
-          connection = await openSerialPort();
+          connection = await _openSerialPort();
           break;
         }
         case 'websock': {
-          connection = await openWebSock();
+          connection = await _openWebSock();
           break;
         }
         default: {
@@ -129,28 +129,44 @@ export function activate(context: vscode.ExtensionContext) {
     }
   };
 
+  const _executePython: (command: string) => Promise<void> = async (
+    command,
+  ) => {
+    if (connection === undefined) {
+      return;
+    }
+    outputChannel.show();
+    const { data, err } = await connection.exec(command);
+    if (data) {
+      outputChannel.appendLine('> Output <');
+      outputChannel.appendLine(data);
+    }
+    if (err) {
+      outputChannel.appendLine('> Error <');
+      outputChannel.appendLine(err);
+    }
+    outputChannel.appendLine('> ---------- <');
+  };
+
   const executeCommand: () => Promise<void> = async () => {
     try {
-      if (connection === undefined) {
-        return;
-      }
       const command = await vscode.window.showInputBox({
         title: 'Input Python command',
       });
       if (command === undefined) {
         return;
       }
-      outputChannel.show();
-      const { data, err } = await connection.exec(command);
-      if (data) {
-        outputChannel.appendLine('> Output <');
-        outputChannel.appendLine(data);
-      }
-      if (err) {
-        outputChannel.appendLine('> Error <');
-        outputChannel.appendLine(err);
-      }
-      outputChannel.appendLine('> ----- <');
+      await _executePython(command);
+    } catch (err: any) {
+      vscode.window.showErrorMessage(err.message);
+    }
+  };
+
+  const executeFile: (textEditor: vscode.TextEditor) => Promise<void> = async (
+    textEditor,
+  ) => {
+    try {
+      await _executePython(textEditor.document.getText());
     } catch (err: any) {
       vscode.window.showErrorMessage(err.message);
     }
@@ -190,6 +206,10 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand(
       'micropython-esp32.executeCommand',
       executeCommand,
+    ),
+    vscode.commands.registerTextEditorCommand(
+      'micropython-esp32.executeFile',
+      executeFile,
     ),
     vscode.commands.registerCommand('micropython-esp32.disconnect', disconnect),
     vscode.workspace.registerFileSystemProvider('esp32fs', esp32Fs, {

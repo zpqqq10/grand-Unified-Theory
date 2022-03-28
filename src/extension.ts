@@ -6,6 +6,9 @@ import ESP32FS from './fileSystem';
 
 export let connection: Connection | undefined = undefined;
 
+/**
+ * Error handler for connection.
+ */
 const onError: (err: Error) => void = (err) => {
   vscode.window.showErrorMessage(err.message);
   vscode.commands.executeCommand(
@@ -16,7 +19,7 @@ const onError: (err: Error) => void = (err) => {
   connection = undefined;
 };
 
-const createConnetion = {
+const createConnection = {
   serial: (path: string, baudRate: string) =>
     new Connection({
       type: 'serial',
@@ -42,14 +45,23 @@ export function activate(context: vscode.ExtensionContext) {
     'Congratulations, your extension "micropython-esp32" is now active!',
   );
 
+  /**
+   * Status bar for connection state display.
+   */
   const statusBarItem = vscode.window.createStatusBarItem();
-  const outputChannel = vscode.window.createOutputChannel('MicroPython-ESP32');
-
   statusBarItem.name = statusBarItem.tooltip = 'ESP32 Connection';
   statusBarItem.command = 'micropython-esp32.connect';
   statusBarItem.text = 'Disconnected';
   statusBarItem.show();
 
+  /**
+   * Output channel for python code execution.
+   */
+  const outputChannel = vscode.window.createOutputChannel('MicroPython-ESP32');
+
+  /**
+   * Initialize ESP32 file system workspace.
+   */
   const initWorkspace: () => void = () => {
     vscode.workspace.updateWorkspaceFolders(0, 0, {
       name: 'ESP32 File System',
@@ -57,6 +69,11 @@ export function activate(context: vscode.ExtensionContext) {
     });
   };
 
+  /**
+   * Open serial port.
+   * Require user to input path and baud rate.
+   * @returns The connection if successfully created, or `undefined` otherwise.
+   */
   const _openSerialPort: () => Promise<Connection | undefined> = async () => {
     const config = vscode.workspace.getConfiguration(
       'micropython-esp32.connection.serial',
@@ -75,9 +92,14 @@ export function activate(context: vscode.ExtensionContext) {
     if (baudRate === undefined) {
       return;
     }
-    return createConnetion.serial(path, baudRate);
+    return createConnection.serial(path, baudRate);
   };
 
+  /**
+   * Open WebSocket.
+   * Require user to input URL and WebREPL password.
+   * @returns The connection if successfully created, or `undefined` otherwise.
+   */
   const _openWebSock: () => Promise<Connection | undefined> = async () => {
     const config = vscode.workspace.getConfiguration(
       'micropython-esp32.connection.websock',
@@ -97,9 +119,13 @@ export function activate(context: vscode.ExtensionContext) {
     if (password === undefined) {
       return;
     }
-    return createConnetion.websock(url, password);
+    return createConnection.websock(url, password);
   };
 
+  /**
+   * Connect to the board.
+   * Require user to choose connection type.
+   */
   const connect: () => Promise<void> = async () => {
     try {
       await disconnect();
@@ -113,6 +139,14 @@ export function activate(context: vscode.ExtensionContext) {
             label: 'websock',
             description: 'Through WebSocket (not supported yet)',
           },
+          {
+            label: 'customSerial',
+            description: 'Through custom serial port',
+          },
+          {
+            label: 'customWebsock',
+            description: 'Through custom WebSocket (not supported yet)',
+          },
         ],
         {
           title: 'Choose connection type',
@@ -121,12 +155,31 @@ export function activate(context: vscode.ExtensionContext) {
       if (type === undefined) {
         return;
       }
+      const config = vscode.workspace.getConfiguration(
+        'micropython-esp32.connection',
+      );
       switch (type.label) {
         case 'serial': {
-          connection = await _openSerialPort();
+          const path = config.get<string>('serial.path');
+          const baudRate = config.get<number>('serial.baudRate');
+          if (path !== undefined && baudRate !== undefined) {
+            connection = createConnection.serial(path, baudRate.toString());
+          }
           break;
         }
         case 'websock': {
+          const url = config.get<string>('websock.url');
+          const password = config.get<string>('websock.password');
+          if (url !== undefined && password !== undefined) {
+            connection = createConnection.websock(url, password);
+          }
+          break;
+        }
+        case 'customSerial': {
+          connection = await _openSerialPort();
+          break;
+        }
+        case 'customWebsock': {
           connection = await _openWebSock();
           break;
         }
@@ -146,6 +199,10 @@ export function activate(context: vscode.ExtensionContext) {
     }
   };
 
+  /**
+   * Execute Python code.
+   * @param code Code to execute.
+   */
   const _executePython: (code: string) => Promise<void> = async (code) => {
     if (connection === undefined) {
       return;
@@ -163,6 +220,10 @@ export function activate(context: vscode.ExtensionContext) {
     outputChannel.appendLine('> ---------- <');
   };
 
+  /**
+   * Execute Python command.
+   * Require user to input command.
+   */
   const executeCommand: () => Promise<void> = async () => {
     try {
       const command = await vscode.window.showInputBox({
@@ -177,6 +238,10 @@ export function activate(context: vscode.ExtensionContext) {
     }
   };
 
+  /**
+   * Execute Python file.
+   * @param textEditor The active editor.
+   */
   const executeFile: (textEditor: vscode.TextEditor) => Promise<void> = async (
     textEditor,
   ) => {
@@ -187,6 +252,9 @@ export function activate(context: vscode.ExtensionContext) {
     }
   };
 
+  /**
+   * Disconnect to the board.
+   */
   const disconnect: () => Promise<void> = async () => {
     try {
       if (connection === undefined) {
@@ -205,6 +273,9 @@ export function activate(context: vscode.ExtensionContext) {
     }
   };
 
+  /**
+   * ESP32 file system for file management.
+   */
   const esp32Fs = new ESP32FS();
 
   // The command has been defined in the package.json file

@@ -24,9 +24,6 @@ export default class Connection {
         this._port = new WebSock(options);
         break;
       }
-      default: {
-        throw new Error('Unknown connection type.');
-      }
     }
     this._blocking = false;
     this.type = options.type;

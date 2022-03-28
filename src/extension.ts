@@ -6,6 +6,33 @@ import ESP32FS from './fileSystem';
 
 export let connection: Connection | undefined = undefined;
 
+const onError: (err: Error) => void = (err) => {
+  vscode.window.showErrorMessage(err.message);
+  vscode.commands.executeCommand(
+    'setContext',
+    'micropython-esp32.connected',
+    false,
+  );
+  connection = undefined;
+};
+
+const createConnetion = {
+  serial: (path: string, baudRate: string) =>
+    new Connection({
+      type: 'serial',
+      path,
+      baudRate,
+      onError,
+    }),
+  websock: (url: string, password: string) =>
+    new Connection({
+      type: 'websock',
+      url,
+      password,
+      onError,
+    }),
+};
+
 // this method is called when your extension is activated
 // your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
@@ -31,59 +58,46 @@ export function activate(context: vscode.ExtensionContext) {
   };
 
   const _openSerialPort: () => Promise<Connection | undefined> = async () => {
-    const path = await vscode.window.showInputBox({ title: 'Input port path' });
+    const config = vscode.workspace.getConfiguration(
+      'micropython-esp32.connection.serial',
+    );
+    const path = await vscode.window.showInputBox({
+      title: 'Input port path',
+      value: config.get('path'),
+    });
     if (path === undefined) {
       return;
     }
     const baudRate = await vscode.window.showInputBox({
       title: 'Input baud rate',
-      value: '115200',
+      value: config.get('baudRate'),
     });
     if (baudRate === undefined) {
       return;
     }
-    return new Connection({
-      type: 'serial',
-      path,
-      baudRate,
-      onError: (err) => {
-        vscode.window.showErrorMessage(err.message);
-        vscode.commands.executeCommand(
-          'setContext',
-          'micropython-esp32.connected',
-          false,
-        );
-        connection = undefined;
-      },
-    });
+    return createConnetion.serial(path, baudRate);
   };
 
   const _openWebSock: () => Promise<Connection | undefined> = async () => {
-    const url = await vscode.window.showInputBox({ title: 'Input URL' });
+    const config = vscode.workspace.getConfiguration(
+      'micropython-esp32.connection.websock',
+    );
+    const url = await vscode.window.showInputBox({
+      title: 'Input URL',
+      value: config.get('url'),
+    });
     if (url === undefined) {
       return;
     }
     const password = await vscode.window.showInputBox({
       title: 'Input password',
+      value: config.get('password'),
       password: true,
     });
     if (password === undefined) {
       return;
     }
-    return new Connection({
-      type: 'websock',
-      url,
-      password,
-      onError: (err) => {
-        vscode.window.showErrorMessage(err.message);
-        vscode.commands.executeCommand(
-          'setContext',
-          'micropython-esp32.connected',
-          false,
-        );
-        connection = undefined;
-      },
-    });
+    return createConnetion.websock(url, password);
   };
 
   const connect: () => Promise<void> = async () => {
@@ -91,8 +105,14 @@ export function activate(context: vscode.ExtensionContext) {
       await disconnect();
       const type = await vscode.window.showQuickPick(
         [
-          { label: 'serial', description: 'SerialPort' },
-          { label: 'websock', description: 'WebSocket (Not Supported Yet)' },
+          {
+            label: 'serial',
+            description: 'Through serial port',
+          },
+          {
+            label: 'websock',
+            description: 'Through WebSocket (not supported yet)',
+          },
         ],
         {
           title: 'Choose connection type',
@@ -110,9 +130,6 @@ export function activate(context: vscode.ExtensionContext) {
           connection = await _openWebSock();
           break;
         }
-        default: {
-          throw new Error('Unknown connection type.');
-        }
       }
       if (connection === undefined) {
         return;
@@ -129,14 +146,12 @@ export function activate(context: vscode.ExtensionContext) {
     }
   };
 
-  const _executePython: (command: string) => Promise<void> = async (
-    command,
-  ) => {
+  const _executePython: (code: string) => Promise<void> = async (code) => {
     if (connection === undefined) {
       return;
     }
     outputChannel.show();
-    const { data, err } = await connection.exec(command);
+    const { data, err } = await connection.exec(code);
     if (data) {
       outputChannel.appendLine('> Output <');
       outputChannel.appendLine(data);

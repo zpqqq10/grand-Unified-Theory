@@ -52,6 +52,37 @@
         "category": "MicroPython-ESP32"
       }
     ],
+    "configuration": [
+      {
+        "title": "MicroPython-ESP32",
+        "properties": {
+          "micropython-esp32.connection.serial.path": {
+            "type": "string",
+            "default": "",
+            "description": "Specifies the path of the serial port.",
+            "order": 10
+          },
+          "micropython-esp32.connection.serial.baudRate": {
+            "type": "integer",
+            "default": 115200,
+            "description": "Specifies the baud rate of the serial port.",
+            "order": 11
+          },
+          "micropython-esp32.connection.websock.url": {
+            "type": "string",
+            "default": "",
+            "description": "Specifies the URL of the WebSocket.",
+            "order": 20
+          },
+          "micropython-esp32.connection.websock.password": {
+            "type": "string",
+            "default": "",
+            "description": "Specifies the password of the WebREPL.",
+            "order": 21
+          }
+        }
+      }
+    ],
     "keybindings": [
       {
         "command": "micropython-esp32.executeFile",

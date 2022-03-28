@@ -117,8 +117,8 @@ export default class ESP32FS implements vscode.FileSystemProvider {
     }
     const { err } = await connection.exec(
       `f=open('${uri.path}','wb')\nf.write(b${JSON.stringify(
-        content.toString(),
-      ).replace(/\\r/g, '')})\nf.close()`,
+        content.toString().replace(/\r/g, ''),
+      )})\nf.close()`,
     );
     if (err) {
       throw vscode.FileSystemError.FileNotFound(uri);

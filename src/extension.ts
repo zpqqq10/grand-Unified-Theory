@@ -1,6 +1,7 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
+import { platform } from 'os';
 import Connection from './connection';
 import ESP32FS from './fileSystem';
 
@@ -160,10 +161,22 @@ export function activate(context: vscode.ExtensionContext) {
       );
       switch (type.label) {
         case 'serial': {
-          const path = config.get<string>('serial.path');
+          const pf = platform(); 
           const baudRate = config.get<number>('serial.baudRate');
-          if (path !== undefined && baudRate !== undefined) {
-            connection = createConnection.serial(path, baudRate.toString());
+          if(pf === 'win32'){
+            const path = config.get<string>('serial.pathForWindows');
+            if (path !== undefined && baudRate !== undefined) {
+              connection = createConnection.serial(path, baudRate.toString());
+            }
+          }
+          else if(pf === 'linux'){
+            const path = config.get<string>('serial.pathForLinux');
+            if (path !== undefined && baudRate !== undefined) {
+              connection = createConnection.serial(path, baudRate.toString());
+            }
+          }
+          else {
+            throw new Error('Platform not supported!');
           }
           break;
         }
@@ -202,13 +215,17 @@ export function activate(context: vscode.ExtensionContext) {
   /**
    * Execute Python code.
    * @param code Code to execute.
+   * @param isFile Whether show the source code in terminal
    */
-  const _executePython: (code: string) => Promise<void> = async (code) => {
+  const _executePython: (code: string, isFile: boolean) => Promise<void> = async (code, isFile) => {
     if (connection === undefined) {
       return;
     }
     outputChannel.show();
     const { data, err } = await connection.exec(code);
+    if(!isFile){
+      outputChannel.appendLine('> ' + code); 
+    }
     if (data) {
       outputChannel.appendLine('> Output <');
       outputChannel.appendLine(data);
@@ -232,7 +249,7 @@ export function activate(context: vscode.ExtensionContext) {
       if (command === undefined) {
         return;
       }
-      await _executePython(command);
+      await _executePython(command, false);
     } catch (err: any) {
       vscode.window.showErrorMessage(err.message);
     }
@@ -246,7 +263,7 @@ export function activate(context: vscode.ExtensionContext) {
     textEditor,
   ) => {
     try {
-      await _executePython(textEditor.document.getText());
+      await _executePython(textEditor.document.getText(), true);
     } catch (err: any) {
       vscode.window.showErrorMessage(err.message);
     }

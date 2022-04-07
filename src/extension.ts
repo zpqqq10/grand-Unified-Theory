@@ -1,14 +1,13 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
-import { platform } from 'os';
 import Connection from './connection';
 import ESP32FS from './fileSystem';
 
 export let connection: Connection | undefined = undefined;
 
 /**
- * Error handler for connection.
+ * The error handler for connection.
  */
 const onError: (err: Error) => void = (err) => {
   vscode.window.showErrorMessage(err.message);
@@ -47,7 +46,7 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   /**
-   * Status bar for connection state display.
+   * The status bar that displays connection state.
    */
   const statusBarItem = vscode.window.createStatusBarItem();
   statusBarItem.name = statusBarItem.tooltip = 'ESP32 Connection';
@@ -56,7 +55,7 @@ export function activate(context: vscode.ExtensionContext) {
   statusBarItem.show();
 
   /**
-   * Output channel for python code execution.
+   * The output channel that displays python code execution result.
    */
   const outputChannel = vscode.window.createOutputChannel('MicroPython-ESP32');
 
@@ -83,14 +82,14 @@ export function activate(context: vscode.ExtensionContext) {
       title: 'Input port path',
       value: config.get('path'),
     });
-    if (path === undefined) {
+    if (!path) {
       return;
     }
     const baudRate = await vscode.window.showInputBox({
       title: 'Input baud rate',
       value: config.get('baudRate'),
     });
-    if (baudRate === undefined) {
+    if (!baudRate) {
       return;
     }
     return createConnection.serial(path, baudRate);
@@ -109,7 +108,7 @@ export function activate(context: vscode.ExtensionContext) {
       title: 'Input URL',
       value: config.get('url'),
     });
-    if (url === undefined) {
+    if (!url) {
       return;
     }
     const password = await vscode.window.showInputBox({
@@ -161,30 +160,22 @@ export function activate(context: vscode.ExtensionContext) {
       );
       switch (type.label) {
         case 'serial': {
-          const pf = platform(); 
+          const path = config.get<string>('serial.path');
           const baudRate = config.get<number>('serial.baudRate');
-          if(pf === 'win32'){
-            const path = config.get<string>('serial.pathForWindows');
-            if (path !== undefined && baudRate !== undefined) {
-              connection = createConnection.serial(path, baudRate.toString());
-            }
-          }
-          else if(pf === 'linux'){
-            const path = config.get<string>('serial.pathForLinux');
-            if (path !== undefined && baudRate !== undefined) {
-              connection = createConnection.serial(path, baudRate.toString());
-            }
-          }
-          else {
-            throw new Error('Platform not supported!');
+          if (path && baudRate) {
+            connection = createConnection.serial(path, baudRate.toString());
+          } else {
+            throw new Error('Please configure serial port preference first.');
           }
           break;
         }
         case 'websock': {
           const url = config.get<string>('websock.url');
           const password = config.get<string>('websock.password');
-          if (url !== undefined && password !== undefined) {
+          if (url && password !== undefined) {
             connection = createConnection.websock(url, password);
+          } else {
+            throw new Error('Please configure WebSocket preference first.');
           }
           break;
         }
@@ -214,17 +205,21 @@ export function activate(context: vscode.ExtensionContext) {
 
   /**
    * Execute Python code.
-   * @param code Code to execute.
-   * @param isFile Whether show the source code in terminal
+   * @param code The code to execute.
+   * @param isFile Specify whether the code is from a file.
+   *               If not, it will be displayed in the output channel.
    */
-  const _executePython: (code: string, isFile: boolean) => Promise<void> = async (code, isFile) => {
+  const _executePython: (
+    code: string,
+    isFile: boolean,
+  ) => Promise<void> = async (code, isFile) => {
     if (connection === undefined) {
       return;
     }
     outputChannel.show();
     const { data, err } = await connection.exec(code);
-    if(!isFile){
-      outputChannel.appendLine('> ' + code); 
+    if (!isFile) {
+      outputChannel.appendLine('> ' + code);
     }
     if (data) {
       outputChannel.appendLine('> Output <');
@@ -291,7 +286,7 @@ export function activate(context: vscode.ExtensionContext) {
   };
 
   /**
-   * ESP32 file system for file management.
+   * The ESP32 file system that manages files.
    */
   const esp32Fs = new ESP32FS();
 

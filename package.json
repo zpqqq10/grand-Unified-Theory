@@ -56,15 +56,9 @@
       {
         "title": "MicroPython-ESP32",
         "properties": {
-          "micropython-esp32.connection.serial.pathForWindows": {
+          "micropython-esp32.connection.serial.path": {
             "type": "string",
-            "default": "COM7",
-            "description": "Specifies the path of the serial port.",
-            "order": 10
-          },
-          "micropython-esp32.connection.serial.pathForLinux": {
-            "type": "string",
-            "default": "/dev/ttyUSB0",
+            "default": "",
             "description": "Specifies the path of the serial port.",
             "order": 10
           },

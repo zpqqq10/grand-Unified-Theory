@@ -15,6 +15,7 @@
     "onCommand:micropython-esp32.executeCommand",
     "onCommand:micropython-esp32.executeFile",
     "onCommand:micropython-esp32.disconnect",
+    "onCommand:micropython-esp32.configWebREPL",
     "onFileSystem:esp32fs"
   ],
   "main": "./out/extension.js",
@@ -50,6 +51,11 @@
         "command": "micropython-esp32.disconnect",
         "title": "Disconnect to ESP32",
         "category": "MicroPython-ESP32"
+      },
+      {
+        "command": "micropython-esp32.configWebREPL",
+        "title": "Configure WebREPL with serial port connected",
+        "category": "MicroPython-ESP32"
       }
     ],
     "configuration": [
@@ -58,7 +64,7 @@
         "properties": {
           "micropython-esp32.connection.serial.path": {
             "type": "string",
-            "default": "",
+            "default": "COM7",
             "description": "Specifies the path of the serial port.",
             "order": 10
           },
@@ -70,15 +76,27 @@
           },
           "micropython-esp32.connection.websock.url": {
             "type": "string",
-            "default": "",
+            "default": "ws://192.168.4.1:8266/",
             "description": "Specifies the URL of the WebSocket.",
             "order": 20
           },
           "micropython-esp32.connection.websock.password": {
             "type": "string",
-            "default": "",
+            "default": "password",
             "description": "Specifies the password of the WebREPL.",
             "order": 21
+          },
+          "micropython-esp32.connection.websock.net": {
+            "type": "string",
+            "default": "pqqqq",
+            "description": "Specifies network that PC and ESP32 both connects to.",
+            "order": 22
+          },
+          "micropython-esp32.connection.websock.netpw": {
+            "type": "string",
+            "default": "z1235789",
+            "description": "Specifies the password of the network that PC and ESP32 both connects to.",
+            "order": 23
           }
         }
       }
@@ -110,6 +128,10 @@
         },
         {
           "command": "micropython-esp32.disconnect",
+          "when": "workbenchState == workspace && micropython-esp32.connected"
+        },
+        {
+          "command": "micropython-esp32.configWebREPL",
           "when": "workbenchState == workspace && micropython-esp32.connected"
         }
       ],

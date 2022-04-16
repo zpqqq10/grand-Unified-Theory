@@ -286,6 +286,65 @@ export function activate(context: vscode.ExtensionContext) {
   };
 
   /**
+   * Configure WebREPL while the serial port is connected.
+   * Assume that PC is connecting to the LAN already.
+   */
+  const configWebREPL: () => void = async () => {
+    const config = vscode.workspace.getConfiguration(
+      'micropython-esp32.connection.websock',
+    );
+    try {
+      const lanname = await vscode.window.showInputBox({
+        title: 'Input the name of LAN to connect',
+        value: config.get('net')
+      });
+      const pw = await vscode.window.showInputBox({
+        title: 'Input the password of LAN to connect',
+        value: config.get('netpw')
+      });
+      // save name + password
+      const name = await vscode.window.showInputBox({
+        title: 'Input the name for this board'
+      });
+      const password = await vscode.window.showInputBox({
+        title: 'Input the password of WebREPL'
+      });
+      if (lanname === undefined || pw === undefined || name === undefined || password === undefined) {
+        return;
+      }
+      if (connection === undefined) {
+        return;
+      }
+      // config webrepl
+      const { data, err } = await connection.exec('import webrepl_setup');
+      vscode.window.showInformationMessage(data);
+      vscode.window.showErrorMessage(err);
+      // enable or diable on booting
+      await connection.exec('E');
+      // password twice
+      await connection.exec(password);
+      await connection.exec(password);
+      // reboot now?
+      await connection.exec('y');
+      // enable or diable on booting
+      await connection.exec('D');
+      // reboot now?
+      await connection.exec('y');
+      // connect to the LAN first
+      await connection.exec('import network');
+      await connection.exec('wlan = network.WLAN(network.STA_IF)');
+      await connection.exec('wlan.active(True)');
+      await connection.exec('wlan.connect(\'' + lanname + '\', \'' + pw + '\')');;
+      await connection.exec('import webrepl');
+      await connection.exec('webrepl.start()');
+      // TODO: append the code to connect to the LAN to boot.py
+      vscode.window.showInformationMessage('Configure WebREPL successfully!');
+    } catch (err: any) {
+      vscode.window.showErrorMessage(err.message);
+    }
+  };
+
+  /**
    * The ESP32 file system that manages files.
    */
   const esp32Fs = new ESP32FS();
@@ -310,6 +369,7 @@ export function activate(context: vscode.ExtensionContext) {
       executeFile,
     ),
     vscode.commands.registerCommand('micropython-esp32.disconnect', disconnect),
+    vscode.commands.registerCommand('micropython-esp32.configWebREPL', configWebREPL),
     vscode.workspace.registerFileSystemProvider('esp32fs', esp32Fs, {
       isCaseSensitive: true,
     }),
@@ -317,4 +377,4 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 // this method is called when your extension is deactivated
-export function deactivate() {}
+export function deactivate() { }

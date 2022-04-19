@@ -3,7 +3,6 @@ import { connection } from './extension';
 
 export default class ESP32FS implements vscode.FileSystemProvider {
   private _emitter = new vscode.EventEmitter<vscode.FileChangeEvent[]>();
-
   readonly onDidChangeFile: vscode.Event<vscode.FileChangeEvent[]> =
     this._emitter.event;
 
@@ -22,7 +21,7 @@ export default class ESP32FS implements vscode.FileSystemProvider {
       throw vscode.FileSystemError.FileNotFound(uri);
     }
     const { data, err } = await connection.exec(
-      `f=os.stat('${uri.path}')\nprint('{}/{}/{}/{}'.format('f'if f[0]&0x8000 else'd',f[9],f[8],f[6]))`,
+      `f=os.stat('${uri.path}')\rprint('{}/{}/{}/{}'.format('f'if f[0]&0x8000 else'd',f[9],f[8],f[6]))`,
     );
     if (err) {
       throw vscode.FileSystemError.FileNotFound(uri);
@@ -44,7 +43,7 @@ export default class ESP32FS implements vscode.FileSystemProvider {
       throw vscode.FileSystemError.FileNotADirectory(uri);
     }
     const { data, err } = await connection.exec(
-      `for f in os.ilistdir('${uri.path}'):\n print('{}/{}'.format(f[0],'f'if f[1]&0x8000 else'd'))`,
+      `for f in os.ilistdir('${uri.path}'):\r print('{}/{}'.format(f[0],'f'if f[1]&0x8000 else'd'))`,
     );
     if (err) {
       throw vscode.FileSystemError.FileNotFound(uri);
@@ -116,9 +115,9 @@ export default class ESP32FS implements vscode.FileSystemProvider {
       throw vscode.FileSystemError.FileExists(uri);
     }
     const { err } = await connection.exec(
-      `f=open('${uri.path}','wb')\nf.write(b${JSON.stringify(
+      `f=open('${uri.path}','wb')\rf.write(b${JSON.stringify(
         content.toString().replace(/\r/g, ''),
-      )})\nf.close()`,
+      )})\rf.close()`,
     );
     if (err) {
       throw vscode.FileSystemError.FileNotFound(uri);

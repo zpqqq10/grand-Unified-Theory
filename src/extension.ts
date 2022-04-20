@@ -1,49 +1,10 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
-import Connection from './connection';
+import Connection, { connection, setConnection } from './connection';
 import ESP32FS from './fileSystem';
 import ESP32Pty from './terminal';
-
-export let connection: Connection | undefined = undefined;
-
-export const createError = {
-  noSerialPreference: () =>
-    new Error('Please configure serial port preference first.'),
-  noWebSockPreference: () =>
-    new Error('Please configure WebSocket preference first.'),
-  noConnection: () => new Error('Please connect to ESP32 first.'),
-};
-
-/**
- * The error handler for connection.
- */
-const onError: (err: Error) => void = (err) => {
-  vscode.window.showErrorMessage(err.message);
-  vscode.commands.executeCommand(
-    'setContext',
-    'micropython-esp32.connected',
-    false,
-  );
-  connection = undefined;
-};
-
-const createConnection = {
-  serial: (path: string, baudRate: string) =>
-    new Connection({
-      type: 'serial',
-      path,
-      baudRate,
-      onError,
-    }),
-  websock: (url: string, password: string) =>
-    new Connection({
-      type: 'websock',
-      url,
-      password,
-      onError,
-    }),
-};
+import * as util from './util';
 
 // this method is called when your extension is activated
 // your extension is activated the very first time the command is executed
@@ -96,7 +57,7 @@ export function activate(context: vscode.ExtensionContext) {
     if (!baudRate) {
       return;
     }
-    return createConnection.serial(path, baudRate);
+    return util.ESP32Connection.serial(path, baudRate);
   };
 
   /**
@@ -123,12 +84,14 @@ export function activate(context: vscode.ExtensionContext) {
     if (password === undefined) {
       return;
     }
-    return createConnection.websock(url, password);
+    return util.ESP32Connection.websock(url, password);
   };
 
   /**
    * Connect to the board.
    * Require user to choose connection type.
+   * @throws noSerialPreference
+   * @throws noWebSockPreference
    */
   const connect: () => Promise<void> = async () => {
     try {
@@ -167,9 +130,11 @@ export function activate(context: vscode.ExtensionContext) {
           const path = config.get<string>('serial.path');
           const baudRate = config.get<number>('serial.baudRate');
           if (path && baudRate) {
-            connection = createConnection.serial(path, baudRate.toString());
+            setConnection(
+              util.ESP32Connection.serial(path, baudRate.toString()),
+            );
           } else {
-            throw createError.noSerialPreference();
+            throw util.ESP32Error.noSerialPreference();
           }
           break;
         }
@@ -177,18 +142,18 @@ export function activate(context: vscode.ExtensionContext) {
           const url = config.get<string>('websock.url');
           const password = config.get<string>('websock.password');
           if (url && password !== undefined) {
-            connection = createConnection.websock(url, password);
+            setConnection(util.ESP32Connection.websock(url, password));
           } else {
-            throw createError.noWebSockPreference();
+            throw util.ESP32Error.noWebSockPreference();
           }
           break;
         }
         case 'customSerial': {
-          connection = await _openSerialPort();
+          setConnection(await _openSerialPort());
           break;
         }
         case 'customWebsock': {
-          connection = await _openWebSock();
+          setConnection(await _openWebSock());
           break;
         }
       }
@@ -212,13 +177,14 @@ export function activate(context: vscode.ExtensionContext) {
    * @param code The code to execute.
    * @param isFile Specify whether the code is from a file.
    *               If not, it will be displayed in the terminal.
+   * @throws noConnection
    */
   const _executePython: (code: string, isFile: boolean) => void = (
     code,
     isFile,
   ) => {
     if (connection === undefined) {
-      throw createError.noConnection();
+      throw util.ESP32Error.noConnection();
     }
     const terminal = vscode.window.createTerminal({
       name: 'MicroPython-ESP32',
@@ -273,7 +239,7 @@ export function activate(context: vscode.ExtensionContext) {
         'micropython-esp32.connected',
         false,
       );
-      connection = undefined;
+      setConnection(undefined);
     } catch (err: any) {
       vscode.window.showErrorMessage(err.message);
     }

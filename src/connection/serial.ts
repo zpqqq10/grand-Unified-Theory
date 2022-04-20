@@ -1,5 +1,6 @@
 import Port from './port';
 import { SerialPort } from 'serialport';
+import * as util from '../util';
 
 export interface SerialOptions {
   type: 'serial';
@@ -26,22 +27,17 @@ export default class Serial implements Port {
     return this._serialport.readableLength;
   }
 
-  read(size: number, timeout?: number): Promise<string> {
-    return new Promise((resolve, reject) => {
-      let counter = timeout;
-      const read = () => {
-        const data = this._serialport.read(size);
-        if (data !== null) {
-          // console.log('serial read', data);
-          resolve(data);
-        } else if (counter !== undefined && --counter <= 0) {
-          reject('Read timed out.');
-        } else {
-          setTimeout(read, 1);
-        }
-      };
-      read();
-    });
+  async read(size: number, timeout?: number): Promise<string> {
+    for (;;) {
+      const data = this._serialport.read(size);
+      if (data !== null) {
+        return data;
+      }
+      if (timeout !== undefined && --timeout < 0) {
+        throw util.ESP32Error.readTimedOut();
+      }
+      await util.sleep(1);
+    }
   }
 
   write(data: string): Promise<void> {

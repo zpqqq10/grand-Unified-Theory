@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
-import { connection, createError } from './extension';
+import { connection } from './connection';
+import * as util from './util';
 
 export default class ESP32Pty implements vscode.Pseudoterminal {
   private _code: string;
@@ -17,7 +18,7 @@ export default class ESP32Pty implements vscode.Pseudoterminal {
     initialDimensions: vscode.TerminalDimensions | undefined,
   ): Promise<void> {
     if (connection === undefined) {
-      throw createError.noConnection();
+      throw util.ESP32Error.noConnection();
     }
     if (!this._isFile) {
       this._emitter.fire(`> ${this._code}\r\n`);
@@ -35,11 +36,11 @@ export default class ESP32Pty implements vscode.Pseudoterminal {
       return;
     }
     if (connection === undefined) {
-      throw createError.noConnection();
+      throw util.ESP32Error.noConnection();
     }
     for (; !this._finished; ) {
       await connection.dangerouslyWrite('\r\x03\x03');
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      await util.sleep(500);
     }
   }
 
@@ -48,7 +49,7 @@ export default class ESP32Pty implements vscode.Pseudoterminal {
       return;
     }
     if (connection === undefined) {
-      throw createError.noConnection();
+      throw util.ESP32Error.noConnection();
     }
     await connection.dangerouslyWrite(data);
   }

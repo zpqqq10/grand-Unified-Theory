@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
-import { connection } from './extension';
+import { connection } from './connection';
+import * as util from './util';
 
 export default class ESP32FS implements vscode.FileSystemProvider {
   private _emitter = new vscode.EventEmitter<vscode.FileChangeEvent[]>();
@@ -18,7 +19,7 @@ export default class ESP32FS implements vscode.FileSystemProvider {
 
   async stat(uri: vscode.Uri): Promise<vscode.FileStat> {
     if (connection === undefined) {
-      throw vscode.FileSystemError.FileNotFound(uri);
+      throw util.ESP32Error.noConnection();
     }
     const { data, err } = await connection.exec(
       `f=os.stat('${uri.path}')\rprint('{}/{}/{}/{}'.format('f'if f[0]&0x8000 else'd',f[9],f[8],f[6]))`,
@@ -37,7 +38,7 @@ export default class ESP32FS implements vscode.FileSystemProvider {
 
   async readDirectory(uri: vscode.Uri): Promise<[string, vscode.FileType][]> {
     if (connection === undefined) {
-      throw vscode.FileSystemError.FileNotFound(uri);
+      throw util.ESP32Error.noConnection();
     }
     if ((await this.stat(uri)).type !== vscode.FileType.Directory) {
       throw vscode.FileSystemError.FileNotADirectory(uri);
@@ -63,7 +64,7 @@ export default class ESP32FS implements vscode.FileSystemProvider {
 
   async createDirectory(uri: vscode.Uri): Promise<void> {
     if (connection === undefined) {
-      throw vscode.FileSystemError.FileNotFound(uri);
+      throw util.ESP32Error.noConnection();
     }
     let stat: vscode.FileStat | undefined = undefined;
     try {
@@ -81,7 +82,7 @@ export default class ESP32FS implements vscode.FileSystemProvider {
 
   async readFile(uri: vscode.Uri): Promise<Uint8Array> {
     if (connection === undefined) {
-      throw vscode.FileSystemError.FileNotFound(uri);
+      throw util.ESP32Error.noConnection();
     }
     if ((await this.stat(uri)).type === vscode.FileType.Directory) {
       throw vscode.FileSystemError.FileIsADirectory(uri);
@@ -99,7 +100,7 @@ export default class ESP32FS implements vscode.FileSystemProvider {
     options: { readonly create: boolean; readonly overwrite: boolean },
   ): Promise<void> {
     if (connection === undefined) {
-      throw vscode.FileSystemError.FileNotFound(uri);
+      throw util.ESP32Error.noConnection();
     }
     let stat: vscode.FileStat | undefined = undefined;
     try {
@@ -133,7 +134,7 @@ export default class ESP32FS implements vscode.FileSystemProvider {
     options: { readonly recursive: boolean },
   ): Promise<void> {
     if (connection === undefined) {
-      throw vscode.FileSystemError.FileNotFound(uri);
+      throw util.ESP32Error.noConnection();
     }
     const stat = await this.stat(uri);
     if (stat.type !== vscode.FileType.Directory) {
@@ -165,7 +166,7 @@ export default class ESP32FS implements vscode.FileSystemProvider {
     options: { readonly overwrite: boolean },
   ): Promise<void> {
     if (connection === undefined) {
-      throw vscode.FileSystemError.FileNotFound(oldUri);
+      throw util.ESP32Error.noConnection();
     }
     let stat: vscode.FileStat | undefined = undefined;
     try {

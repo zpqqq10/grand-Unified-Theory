@@ -1,6 +1,7 @@
 import Port from './port';
 import Serial, { SerialOptions } from './serial';
 import WebSock, { WebSockOptions } from './websock';
+import * as util from '../util';
 
 type ConnectionOptions = SerialOptions | WebSockOptions;
 
@@ -40,17 +41,10 @@ export default class Connection {
    * Lock the port to ensure at most one ongoing operation.
    */
   private async _lock<T>(callback: () => Promise<T>): Promise<T> {
-    await new Promise<void>((resolve) => {
-      const lock = () => {
-        if (!this._locking) {
-          this._locking = true;
-          resolve();
-        } else {
-          setTimeout(lock, 1);
-        }
-      };
-      lock();
-    });
+    for (; this._locking; ) {
+      await util.sleep(1);
+    }
+    this._locking = true;
     try {
       return await callback();
     } finally {
@@ -63,6 +57,7 @@ export default class Connection {
    * @param suffix The string to stop read.
    * @param timeout The time limit of one-byte read.
    * @returns The bytes read from the port.
+   * @throws readTimedOut
    */
   private async _readUntil(suffix: string, timeout?: number): Promise<string> {
     for (let data = ''; ; ) {
@@ -70,6 +65,9 @@ export default class Connection {
       if (data.endsWith(suffix)) {
         console.log('serial read', data);
         return data.slice(0, -suffix.length);
+      }
+      if (timeout !== undefined && --timeout < 0) {
+        throw util.ESP32Error.readTimedOut();
       }
     }
   }
@@ -86,11 +84,9 @@ export default class Connection {
         }
         await this._port.write('\r\x01');
         try {
-          await this._readUntil('raw REPL; CTRL-B to exit\r\n', 100);
-        } catch {
-          continue;
-        }
-        return;
+          await this._readUntil('raw REPL; CTRL-B to exit\r\n', 500);
+          return;
+        } catch {}
       }
     });
     await this.exec('import os');
@@ -107,9 +103,9 @@ export default class Connection {
         if (code === '') {
           return { data: '', err: '' };
         }
-        await this._readUntil('>', 100);
+        await this._readUntil('>', 500);
         await this._port.write(code + '\x04');
-        await this._readUntil('OK', 100);
+        await this._readUntil('OK', 500);
         const data = await this._readUntil('\x04');
         const err = await this._readUntil('\x04');
         return { data, err };
@@ -125,8 +121,8 @@ export default class Connection {
    * @param expression The expression to evaluate.
    * @returns The evaluation result.
    */
-  async eval(expression: string): Promise<Result> {
-    return await this.exec(`print(${expression},end='')`);
+  eval(expression: string): Promise<Result> {
+    return this.exec(`print(${expression},end='')`);
   }
 
   /**
@@ -144,9 +140,9 @@ export default class Connection {
         if (code === '') {
           return;
         }
-        await this._readUntil('>', 100);
+        await this._readUntil('>', 500);
         await this._port.write(code + '\x04');
-        await this._readUntil('OK', 100);
+        await this._readUntil('OK', 500);
         for (let i = 0; i < 2; i++) {
           for (;;) {
             const data = await this._port.read(1);
@@ -167,14 +163,22 @@ export default class Connection {
    * Write bytes to the port without locking.
    * @param data The bytes to write.
    */
-  async dangerouslyWrite(data: string): Promise<void> {
-    await this._port.write(data);
+  dangerouslyWrite(data: string): Promise<void> {
+    return this._port.write(data);
   }
 
   /**
    * Close the port.
    */
-  async close(): Promise<void> {
-    await this._port.close();
+  close(): Promise<void> {
+    return this._port.close();
   }
 }
+
+export let connection: Connection | undefined = undefined;
+
+export const setConnection: (newConnection: Connection | undefined) => void = (
+  newConnection,
+) => {
+  connection = newConnection;
+};

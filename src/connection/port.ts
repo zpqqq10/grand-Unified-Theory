@@ -14,6 +14,7 @@ export default interface Port {
    * @param size The number of bytes to read.
    * @param timeout The time limit of read.
    * @returns The bytes read from the port.
+   * @throws readTimedOut
    */
   read(size: number, timeout?: number): Promise<string>;
 

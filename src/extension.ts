@@ -3,8 +3,17 @@
 import * as vscode from 'vscode';
 import Connection from './connection';
 import ESP32FS from './fileSystem';
+import ESP32Pty from './terminal';
 
 export let connection: Connection | undefined = undefined;
+
+export const createError = {
+  noSerialPreference: () =>
+    new Error('Please configure serial port preference first.'),
+  noWebSockPreference: () =>
+    new Error('Please configure WebSocket preference first.'),
+  noConnection: () => new Error('Please connect to ESP32 first.'),
+};
 
 /**
  * The error handler for connection.
@@ -53,11 +62,6 @@ export function activate(context: vscode.ExtensionContext) {
   statusBarItem.command = 'micropython-esp32.connect';
   statusBarItem.text = 'Disconnected';
   statusBarItem.show();
-
-  /**
-   * The output channel that displays python code execution result.
-   */
-  const outputChannel = vscode.window.createOutputChannel('MicroPython-ESP32');
 
   /**
    * Initialize ESP32 file system workspace.
@@ -165,7 +169,7 @@ export function activate(context: vscode.ExtensionContext) {
           if (path && baudRate) {
             connection = createConnection.serial(path, baudRate.toString());
           } else {
-            throw new Error('Please configure serial port preference first.');
+            throw createError.noSerialPreference();
           }
           break;
         }
@@ -175,7 +179,7 @@ export function activate(context: vscode.ExtensionContext) {
           if (url && password !== undefined) {
             connection = createConnection.websock(url, password);
           } else {
-            throw new Error('Please configure WebSocket preference first.');
+            throw createError.noWebSockPreference();
           }
           break;
         }
@@ -207,29 +211,21 @@ export function activate(context: vscode.ExtensionContext) {
    * Execute Python code.
    * @param code The code to execute.
    * @param isFile Specify whether the code is from a file.
-   *               If not, it will be displayed in the output channel.
+   *               If not, it will be displayed in the terminal.
    */
-  const _executePython: (
-    code: string,
-    isFile: boolean,
-  ) => Promise<void> = async (code, isFile) => {
+  const _executePython: (code: string, isFile: boolean) => void = (
+    code,
+    isFile,
+  ) => {
     if (connection === undefined) {
-      return;
+      throw createError.noConnection();
     }
-    outputChannel.show();
-    const { data, err } = await connection.exec(code);
-    if (!isFile) {
-      outputChannel.appendLine('> ' + code);
-    }
-    if (data) {
-      outputChannel.appendLine('> Output <');
-      outputChannel.appendLine(data);
-    }
-    if (err) {
-      outputChannel.appendLine('> Error <');
-      outputChannel.appendLine(err);
-    }
-    outputChannel.appendLine('> ---------- <');
+    const terminal = vscode.window.createTerminal({
+      name: 'MicroPython-ESP32',
+      pty: new ESP32Pty(code, isFile),
+    });
+    terminal.show();
+    context.subscriptions.push(terminal);
   };
 
   /**
@@ -244,7 +240,7 @@ export function activate(context: vscode.ExtensionContext) {
       if (command === undefined) {
         return;
       }
-      await _executePython(command, false);
+      _executePython(command, false);
     } catch (err: any) {
       vscode.window.showErrorMessage(err.message);
     }
@@ -254,11 +250,9 @@ export function activate(context: vscode.ExtensionContext) {
    * Execute Python file.
    * @param textEditor The active editor.
    */
-  const executeFile: (textEditor: vscode.TextEditor) => Promise<void> = async (
-    textEditor,
-  ) => {
+  const executeFile: (textEditor: vscode.TextEditor) => void = (textEditor) => {
     try {
-      await _executePython(textEditor.document.getText(), true);
+      _executePython(textEditor.document.getText(), true);
     } catch (err: any) {
       vscode.window.showErrorMessage(err.message);
     }
@@ -354,7 +348,6 @@ export function activate(context: vscode.ExtensionContext) {
   // The commandId parameter must match the command field in package.json
   context.subscriptions.push(
     statusBarItem,
-    outputChannel,
     vscode.commands.registerCommand(
       'micropython-esp32.initWorkspace',
       initWorkspace,
@@ -370,7 +363,7 @@ export function activate(context: vscode.ExtensionContext) {
     ),
     vscode.commands.registerCommand('micropython-esp32.disconnect', disconnect),
     vscode.commands.registerCommand('micropython-esp32.configWebREPL', configWebREPL),
-    vscode.workspace.registerFileSystemProvider('esp32fs', esp32Fs, {
+    vscode.workspace.registerFileSystemProvider('esp32fs', new ESP32FS(), {
       isCaseSensitive: true,
     }),
   );

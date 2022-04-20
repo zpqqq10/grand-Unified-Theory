@@ -9,9 +9,13 @@ interface Result {
   err: string;
 }
 
+interface ReadCallback {
+  (data: string): void;
+}
+
 export default class Connection {
   private _port: Port;
-  private _blocking: boolean;
+  private _locking: boolean = false;
   readonly type: string;
 
   constructor(options: ConnectionOptions) {
@@ -25,22 +29,21 @@ export default class Connection {
         break;
       }
     }
-    this._blocking = false;
     this.type = options.type;
   }
 
-  get address() {
+  get address(): string {
     return this._port.address;
   }
 
   /**
-   * Block the port to ensure at most one ongoing operation.
+   * Lock the port to ensure at most one ongoing operation.
    */
-  private _block(): Promise<void> {
-    return new Promise((resolve) => {
+  private async _lock<T>(callback: () => Promise<T>): Promise<T> {
+    await new Promise<void>((resolve) => {
       const lock = () => {
-        if (!this._blocking) {
-          this._blocking = true;
+        if (!this._locking) {
+          this._locking = true;
           resolve();
         } else {
           setTimeout(lock, 1);
@@ -48,70 +51,73 @@ export default class Connection {
       };
       lock();
     });
+    try {
+      return await callback();
+    } finally {
+      this._locking = false;
+    }
   }
 
   /**
    * Read bytes from the port until a certain string is met.
    * @param suffix The string to stop read.
+   * @param timeout The time limit of one-byte read.
    * @returns The bytes read from the port.
    */
-  private async _readUntil(suffix: string): Promise<string> {
+  private async _readUntil(suffix: string, timeout?: number): Promise<string> {
     for (let data = ''; ; ) {
-      data += await this._port.read(1);
+      data += await this._port.read(1, timeout);
       if (data.endsWith(suffix)) {
         console.log('serial read', data);
-        return data;
+        return data.slice(0, -suffix.length);
       }
     }
-  }
-
-  private async _init(): Promise<void> {
-    await this._port.write('\x03\x03');
-    for (; this._port.readableLength > 0; ) {
-      await this._port.read(this._port.readableLength);
-    }
-    await this._port.write('\x01');
-    await this._readUntil('raw REPL; CTRL-B to exit\r\n');
-    await this._port.write('\x04');
-    await this._readUntil('MPY: soft reboot\r\n');
-    await this._readUntil('raw REPL; CTRL-B to exit\r\n');
-    await this._exec('import os');
   }
 
   /**
    * Initialize the board.
    */
   async init(): Promise<void> {
-    await this._block();
-    await this._init();
-    this._blocking = false;
-  }
-
-  private async _exec(command: string): Promise<Result> {
-    if (command === '') {
-      return { data: '', err: '' };
-    }
-    await this._readUntil('>');
-    await this._port.write(command + '\x04');
-    await this._readUntil('OK');
-    const data = await this._readUntil('\x04');
-    const err = await this._readUntil('\x04');
-    return {
-      data: data.slice(0, data.length - 1),
-      err: err.slice(0, err.length - 1),
-    };
+    await this._lock<void>(async () => {
+      for (;;) {
+        await this._port.write('\r\x03\x03');
+        for (; this._port.readableLength > 0; ) {
+          await this._port.read(this._port.readableLength);
+        }
+        await this._port.write('\r\x01');
+        try {
+          await this._readUntil('raw REPL; CTRL-B to exit\r\n', 100);
+        } catch {
+          continue;
+        }
+        return;
+      }
+    });
+    await this.exec('import os');
   }
 
   /**
-   * Execute a command on the board.
-   * @param command The command to execute.
+   * Execute Python code on the board.
+   * @param code The code to execute.
    * @returns The execution result.
    */
-  async exec(command: string): Promise<Result> {
-    await this._block();
-    const result = await this._exec(command);
-    this._blocking = false;
-    return result;
+  async exec(code: string): Promise<Result> {
+    try {
+      return await this._lock<Result>(async () => {
+        if (code === '') {
+          return { data: '', err: '' };
+        }
+        await this._readUntil('>', 100);
+        await this._port.write(code + '\x04');
+        await this._readUntil('OK', 100);
+        const data = await this._readUntil('\x04');
+        const err = await this._readUntil('\x04');
+        return { data, err };
+      });
+    } catch (err) {
+      await this.init();
+      throw err;
+    }
   }
 
   /**
@@ -121,6 +127,48 @@ export default class Connection {
    */
   async eval(expression: string): Promise<Result> {
     return await this.exec(`print(${expression},end='')`);
+  }
+
+  /**
+   * Execute Python code interactively on the board.
+   * @param code The code to execute.
+   * @param readCallback The port read callback.
+   */
+  async interactivelyExec(
+    code: string,
+    readCallback: ReadCallback,
+  ): Promise<void> {
+    try {
+      await this._lock<void>(async () => {
+        readCallback('');
+        if (code === '') {
+          return;
+        }
+        await this._readUntil('>', 100);
+        await this._port.write(code + '\x04');
+        await this._readUntil('OK', 100);
+        for (let i = 0; i < 2; i++) {
+          for (;;) {
+            const data = await this._port.read(1);
+            if (data === '\x04') {
+              break;
+            }
+            readCallback(data);
+          }
+        }
+      });
+    } catch (err) {
+      await this.init();
+      throw err;
+    }
+  }
+
+  /**
+   * Write bytes to the port without locking.
+   * @param data The bytes to write.
+   */
+  async dangerouslyWrite(data: string): Promise<void> {
+    await this._port.write(data);
   }
 
   /**

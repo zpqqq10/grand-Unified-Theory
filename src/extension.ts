@@ -5,6 +5,8 @@ import Connection, { connection, setConnection } from './connection';
 import ESP32FS from './fileSystem';
 import ESP32Pty from './terminal';
 import * as util from './util';
+import * as fs from 'fs';
+import path = require('path');
 
 // this method is called when your extension is activated
 // your extension is activated the very first time the command is executed
@@ -245,6 +247,59 @@ export function activate(context: vscode.ExtensionContext) {
     }
   };
 
+  // the data format to save
+  interface WSInfo {
+    boardname: string,
+    wsurl: string,
+    webreplpw: string,
+    date: string
+  }
+
+  /**
+   * Return a timestamp.
+   */
+  const _getTime: () => string = () => {
+    const date = new Date();
+    const y = date.getFullYear();
+    const m = date.getMonth();
+    const d = date.getDate();
+    const h = date.getHours();
+    const min = date.getMinutes();
+    return y + '-' + m + '-' + d + ' ' + h + ':' + min;
+  };
+
+  /**
+   * Save new infomation of a board to a local file.
+   */
+  const _saveJSON: (boardname: string, wsurl: string, webreplpw: string) => void = async (boardname, wsurl, webreplpw) => {
+    const config = vscode.workspace.getConfiguration(
+      'micropython-esp32.local',
+    );
+    const path = config.get('path') + 'esp32/WSInfo.json';
+    if (fs.existsSync(path)) {
+      let json: WSInfo[] = JSON.parse(fs.readFileSync(path, 'utf-8'));
+      json.push({
+        boardname: boardname,
+        wsurl: wsurl,
+        webreplpw: webreplpw,
+        date: _getTime()
+      });
+      fs.writeFileSync(path, JSON.stringify(json));
+    }
+    else {
+      let json: WSInfo[] = [];
+      const item: WSInfo = {
+        boardname: boardname,
+        wsurl: wsurl,
+        webreplpw: webreplpw,
+        date: _getTime()
+      };
+      json.push(item);
+      fs.mkdirSync(config.get('path') + 'esp32');
+      fs.writeFileSync(path, JSON.stringify(json));
+    }
+  };
+
   /**
    * Configure WebREPL while the serial port is connected.
    * Assume that PC is connecting to the LAN already.
@@ -253,54 +308,71 @@ export function activate(context: vscode.ExtensionContext) {
     const config = vscode.workspace.getConfiguration(
       'micropython-esp32.connection.websock',
     );
+    const lanname = await vscode.window.showInputBox({
+      title: 'Input the name of LAN to connect',
+      value: config.get('net')
+    });
+    const pw = await vscode.window.showInputBox({
+      title: 'Input the password of LAN to connect',
+      value: config.get('netpw')
+    });
+    // save name + password
+    const name = await vscode.window.showInputBox({
+      title: 'Input the name for this board'
+    });
+    let password = await vscode.window.showInputBox({
+      title: 'Input the password (4-9 chars) of WebREPL',
+      password: true
+    });
+    while (password === undefined || password?.length < 4 || password?.length > 9) {
+      password = await vscode.window.showInputBox({
+        title: 'Input the password (4-9 chars) of WebREPL',
+        password: true
+      });
+    }
+    if (lanname === undefined || pw === undefined || name === undefined || password === undefined) {
+      return;
+    }
+    if (connection === undefined) {
+      return;
+    }
+
     try {
-      const lanname = await vscode.window.showInputBox({
-        title: 'Input the name of LAN to connect',
-        value: config.get('net')
-      });
-      const pw = await vscode.window.showInputBox({
-        title: 'Input the password of LAN to connect',
-        value: config.get('netpw')
-      });
-      // save name + password
-      const name = await vscode.window.showInputBox({
-        title: 'Input the name for this board'
-      });
-      const password = await vscode.window.showInputBox({
-        title: 'Input the password of WebREPL'
-      });
-      if (lanname === undefined || pw === undefined || name === undefined || password === undefined) {
-        return;
-      }
-      if (connection === undefined) {
-        return;
-      }
-      // config webrepl
-      const { data, err } = await connection.exec('import webrepl_setup');
-      vscode.window.showInformationMessage(data);
-      vscode.window.showErrorMessage(err);
-      // enable or diable on booting
-      await connection.exec('E');
-      // password twice
-      await connection.exec(password);
-      await connection.exec(password);
-      // reboot now?
-      await connection.exec('y');
-      // enable or diable on booting
-      await connection.exec('D');
-      // reboot now?
-      await connection.exec('y');
-      // connect to the LAN first
-      await connection.exec('import network');
-      await connection.exec('wlan = network.WLAN(network.STA_IF)');
-      await connection.exec('wlan.active(True)');
-      await connection.exec('wlan.connect(\'' + lanname + '\', \'' + pw + '\')');;
-      await connection.exec('import webrepl');
-      await connection.exec('webrepl.start()');
-      // TODO: append the code to connect to the LAN to boot.py
+      await esp32Fs.stat(vscode.Uri.file('./webrepl_cfg.py'));
+      // overwrite
+      esp32Fs.writeFile(vscode.Uri.file('./webrepl_cfg.py'),
+        Buffer.from('PASS=\'' + password + '\''),
+        { create: false, overwrite: true });
+    }
+    catch {
+      // create
+      esp32Fs.writeFile(vscode.Uri.file('./webrepl_cfg.py'),
+        Buffer.from('PASS=\'' + password + '\''),
+        { create: true, overwrite: false });
+    }
+    // connect to the LAN first
+    const line_ = '(\'' + lanname + '\', \'' + pw + '\')';
+    await connection.exec('import network');
+    await connection.exec('wlan = network.WLAN(network.STA_IF)');
+    await connection.exec('wlan.active(True)');
+    await connection.exec('wlan.connect' + line_);;
+    await connection.exec('import webrepl');
+    const { data, err } = await connection.exec('webrepl.start()');
+    const wsurl = data.match(/ws:\/\/\d+\.\d+\.\d+\.\d+:\d+/)?.toString();
+    // TODO: remove commented commands
+    esp32Fs.appendFile(vscode.Uri.file('boot.py'), Buffer.from(
+      '\nimport network\nwlan = network.WLAN(network.STA_IF)\nwlan.active(True)\nwlan.connect' + line_ + '\nimport webrepl\nwebrepl.start()\n'
+    ));
+    await connection.exec('import machine');
+    await connection.dangerouslyWrite('machine.reset()' + '\x04');
+    await connection.init();
+    if (wsurl) {
+      _saveJSON(name, wsurl, password);
+      vscode.window.showInformationMessage('url:' + wsurl);
       vscode.window.showInformationMessage('Configure WebREPL successfully!');
-    } catch (err: any) {
-      vscode.window.showErrorMessage(err.message);
+    }
+    else {
+      vscode.window.showErrorMessage('WebSocket is NOT open and the information is not saved!');
     }
   };
 
@@ -329,11 +401,8 @@ export function activate(context: vscode.ExtensionContext) {
     ),
     vscode.commands.registerCommand('micropython-esp32.disconnect', disconnect),
     vscode.commands.registerCommand('micropython-esp32.configWebREPL', configWebREPL),
-    vscode.workspace.registerFileSystemProvider('esp32fs', new ESP32FS(), {
+    vscode.workspace.registerFileSystemProvider('esp32fs', esp32Fs, {
       isCaseSensitive: true,
     }),
   );
 }
-
-// this method is called when your extension is deactivated
-export function deactivate() { }

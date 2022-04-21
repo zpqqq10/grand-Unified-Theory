@@ -62,6 +62,12 @@
       {
         "title": "MicroPython-ESP32",
         "properties": {
+          "micropython-esp32.local.path": {
+            "type": "string",
+            "default": "./",
+            "description": "Specifies the path to save teh information of the WS.",
+            "order": 10
+          },
           "micropython-esp32.connection.serial.path": {
             "type": "string",
             "default": "COM7",

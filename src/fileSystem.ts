@@ -129,6 +129,34 @@ export default class ESP32FS implements vscode.FileSystemProvider {
     this._emitter.fire([{ type: vscode.FileChangeType.Changed, uri }]);
   }
 
+  async appendFile(
+    uri: vscode.Uri,
+    content: Uint8Array,
+  ): Promise<void> {
+    if (connection === undefined) {
+      throw util.ESP32Error.noConnection();
+    }
+    let stat: vscode.FileStat | undefined = undefined;
+    try {
+      stat = await this.stat(uri);
+    } catch {}
+    if (stat?.type === vscode.FileType.Directory) {
+      throw vscode.FileSystemError.FileIsADirectory(uri);
+    }
+    const { err } = await connection.exec(
+      `f=open('${uri.path}','ab+')\rf.write(b${JSON.stringify(
+        content.toString().replace(/\r/g, ''),
+      )})\rf.close()`,
+    );
+    if (err) {
+      throw vscode.FileSystemError.FileNotFound(uri);
+    }
+    if (!stat) {
+      this._emitter.fire([{ type: vscode.FileChangeType.Created, uri }]);
+    }
+    this._emitter.fire([{ type: vscode.FileChangeType.Changed, uri }]);
+  }
+
   async delete(
     uri: vscode.Uri,
     options: { readonly recursive: boolean },

@@ -2,6 +2,7 @@ import Port from './port';
 import Serial, { SerialOptions } from './serial';
 import WebSock, { WebSockOptions } from './websock';
 import * as util from '../util';
+import ESP32FS from '../fileSystem';
 
 type ConnectionOptions = SerialOptions | WebSockOptions;
 
@@ -115,6 +116,52 @@ export default class Connection {
       throw err;
     }
   }
+
+  /**
+   * Configure WebREPL.
+   * @param password The password of WebREPL.
+   * @param existed Whether there is a webreplcfg.py.
+   * @returns The execution result.
+   */
+  //  async configWebREPL(password: string, existed: boolean): Promise<Result> {
+  //   try {
+  //     return await this._lock<Result>(async () => {
+  //       if (password === '') {
+  //         return { data: '', err: '' };
+  //       }
+  //       await this._port.write('import webrepl_setup' + '\x04');
+  //       await this._readUntil('> ', 500);
+  //       await this._port.write('E\r');
+  //       if(existed){
+  //         // change password?
+  //         await this._readUntil('password? (y/n) ', 500);
+  //         await this._port.write('y\r');
+  //       }
+  //       else{
+  //         // new password
+  //       }
+  //       await this._readUntil('(4-9 chars): ', 500);
+  //       await this._port.write(password+'\r');
+  //       await this._readUntil('Confirm password: ', 500);
+  //       await this._port.write(password+'\r');
+  //       await this._readUntil('reboot now? (y/n) ', 500);
+  //       await this._port.write('y\r');
+  //       // reboot
+  //       // reenter raw-repl
+  //       await this.init();
+  //       console.log('444444444444444444444');
+  //       await this._port.write('import webrepl_setup' + '\x04');
+  //       await this._readUntil('> ', 500);
+  //       await this._port.write('D\r');
+  //       const data = '';
+  //       const err = '';
+  //       return { data, err };
+  //     });
+  //   } catch (err) {
+  //     await this.init();
+  //     throw err;
+  //   }
+  // }
 
   /**
    * Evalute the result of an expression.

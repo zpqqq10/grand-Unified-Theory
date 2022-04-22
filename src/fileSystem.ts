@@ -18,11 +18,13 @@ export default class ESP32FS implements vscode.FileSystemProvider {
   }
 
   async stat(uri: vscode.Uri): Promise<vscode.FileStat> {
-    if (connection === undefined) {
+    if (!connection) {
       throw util.ESP32Error.noConnection();
     }
     const { data, err } = await connection.exec(
-      `f=os.stat('${uri.path}')\rprint('{}/{}/{}/{}'.format('f'if f[0]&0x8000 else'd',f[9],f[8],f[6]))`,
+      `
+f=os.stat('${uri.path}')
+print('{}/{}/{}/{}'.format('f'if f[0]&0x8000 else'd',f[9],f[8],f[6]))`,
     );
     if (err) {
       throw vscode.FileSystemError.FileNotFound(uri);
@@ -37,14 +39,16 @@ export default class ESP32FS implements vscode.FileSystemProvider {
   }
 
   async readDirectory(uri: vscode.Uri): Promise<[string, vscode.FileType][]> {
-    if (connection === undefined) {
+    if (!connection) {
       throw util.ESP32Error.noConnection();
     }
     if ((await this.stat(uri)).type !== vscode.FileType.Directory) {
       throw vscode.FileSystemError.FileNotADirectory(uri);
     }
     const { data, err } = await connection.exec(
-      `for f in os.ilistdir('${uri.path}'):\r print('{}/{}'.format(f[0],'f'if f[1]&0x8000 else'd'))`,
+      `
+for f in os.ilistdir('${uri.path}'):
+ print('{}/{}'.format(f[0],'f'if f[1]&0x8000 else'd'))`,
     );
     if (err) {
       throw vscode.FileSystemError.FileNotFound(uri);
@@ -63,7 +67,7 @@ export default class ESP32FS implements vscode.FileSystemProvider {
   }
 
   async createDirectory(uri: vscode.Uri): Promise<void> {
-    if (connection === undefined) {
+    if (!connection) {
       throw util.ESP32Error.noConnection();
     }
     let stat: vscode.FileStat | undefined = undefined;
@@ -81,7 +85,7 @@ export default class ESP32FS implements vscode.FileSystemProvider {
   }
 
   async readFile(uri: vscode.Uri): Promise<Uint8Array> {
-    if (connection === undefined) {
+    if (!connection) {
       throw util.ESP32Error.noConnection();
     }
     if ((await this.stat(uri)).type === vscode.FileType.Directory) {
@@ -99,7 +103,7 @@ export default class ESP32FS implements vscode.FileSystemProvider {
     content: Uint8Array,
     options: { readonly create: boolean; readonly overwrite: boolean },
   ): Promise<void> {
-    if (connection === undefined) {
+    if (!connection) {
       throw util.ESP32Error.noConnection();
     }
     let stat: vscode.FileStat | undefined = undefined;
@@ -116,9 +120,10 @@ export default class ESP32FS implements vscode.FileSystemProvider {
       throw vscode.FileSystemError.FileExists(uri);
     }
     const { err } = await connection.exec(
-      `f=open('${uri.path}','wb')\rf.write(b${JSON.stringify(
-        content.toString().replace(/\r/g, ''),
-      )})\rf.close()`,
+      `
+f=open('${uri.path}','wb')
+f.write(b${JSON.stringify(content.toString().replace(/\r/g, ''))})
+f.close()`,
     );
     if (err) {
       throw vscode.FileSystemError.FileNotFound(uri);
@@ -129,11 +134,8 @@ export default class ESP32FS implements vscode.FileSystemProvider {
     this._emitter.fire([{ type: vscode.FileChangeType.Changed, uri }]);
   }
 
-  async appendFile(
-    uri: vscode.Uri,
-    content: Uint8Array,
-  ): Promise<void> {
-    if (connection === undefined) {
+  async appendFile(uri: vscode.Uri, content: Uint8Array): Promise<void> {
+    if (!connection) {
       throw util.ESP32Error.noConnection();
     }
     let stat: vscode.FileStat | undefined = undefined;
@@ -144,9 +146,10 @@ export default class ESP32FS implements vscode.FileSystemProvider {
       throw vscode.FileSystemError.FileIsADirectory(uri);
     }
     const { err } = await connection.exec(
-      `f=open('${uri.path}','ab+')\rf.write(b${JSON.stringify(
-        content.toString().replace(/\r/g, ''),
-      )})\rf.close()`,
+      `
+f=open('${uri.path}','ab')
+f.write(b${JSON.stringify(content.toString().replace(/\r/g, ''))})
+f.close()`,
     );
     if (err) {
       throw vscode.FileSystemError.FileNotFound(uri);
@@ -161,7 +164,7 @@ export default class ESP32FS implements vscode.FileSystemProvider {
     uri: vscode.Uri,
     options: { readonly recursive: boolean },
   ): Promise<void> {
-    if (connection === undefined) {
+    if (!connection) {
       throw util.ESP32Error.noConnection();
     }
     const stat = await this.stat(uri);
@@ -193,7 +196,7 @@ export default class ESP32FS implements vscode.FileSystemProvider {
     newUri: vscode.Uri,
     options: { readonly overwrite: boolean },
   ): Promise<void> {
-    if (connection === undefined) {
+    if (!connection) {
       throw util.ESP32Error.noConnection();
     }
     let stat: vscode.FileStat | undefined = undefined;

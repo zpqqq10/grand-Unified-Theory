@@ -2,7 +2,6 @@ import Port from './port';
 import Serial, { SerialOptions } from './serial';
 import WebSock, { WebSockOptions } from './websock';
 import * as util from '../util';
-import ESP32FS from '../fileSystem';
 
 type ConnectionOptions = SerialOptions | WebSockOptions;
 
@@ -60,14 +59,14 @@ export default class Connection {
    * @returns The bytes read from the port.
    * @throws readTimedOut
    */
-  private async _readUntil(suffix: string, timeout?: number): Promise<string> {
+  private async _readUntil(suffix: string, timeout: number): Promise<string> {
     for (let data = ''; ; ) {
       data += await this._port.read(1, timeout);
       if (data.endsWith(suffix)) {
         console.log('serial read', data);
         return data.slice(0, -suffix.length);
       }
-      if (timeout !== undefined && --timeout < 0) {
+      if (--timeout < 0) {
         throw util.ESP32Error.readTimedOut();
       }
     }
@@ -96,19 +95,30 @@ export default class Connection {
   /**
    * Execute Python code on the board.
    * @param code The code to execute.
+   * @param readCallback The port read callback.
    * @returns The execution result.
    */
-  async exec(code: string): Promise<Result> {
+  async exec(code: string, readCallback?: ReadCallback): Promise<Result> {
     try {
       return await this._lock<Result>(async () => {
-        if (code === '') {
-          return { data: '', err: '' };
+        let data = '';
+        let err = '';
+        if (code) {
+          await this._readUntil('>', 500);
+          await this._port.write(`${code}\x04`);
+          await this._readUntil('OK', 500);
+          readCallback && readCallback('');
+          for (let i = 0; i < 2; i++) {
+            for (;;) {
+              const s = await this._port.read(1);
+              if (s === '\x04') {
+                break;
+              }
+              i === 0 ? (data += s) : (err += s);
+              readCallback && readCallback(s);
+            }
+          }
         }
-        await this._readUntil('>', 500);
-        await this._port.write(code + '\x04');
-        await this._readUntil('OK', 500);
-        const data = await this._readUntil('\x04');
-        const err = await this._readUntil('\x04');
         return { data, err };
       });
     } catch (err) {
@@ -126,10 +136,10 @@ export default class Connection {
   //  async configWebREPL(password: string, existed: boolean): Promise<Result> {
   //   try {
   //     return await this._lock<Result>(async () => {
-  //       if (password === '') {
+  //       if (!password) {
   //         return { data: '', err: '' };
   //       }
-  //       await this._port.write('import webrepl_setup' + '\x04');
+  //       await this._port.write('import webrepl_setup\x04');
   //       await this._readUntil('> ', 500);
   //       await this._port.write('E\r');
   //       if(existed){
@@ -150,7 +160,7 @@ export default class Connection {
   //       // reenter raw-repl
   //       await this.init();
   //       console.log('444444444444444444444');
-  //       await this._port.write('import webrepl_setup' + '\x04');
+  //       await this._port.write('import webrepl_setup\x04');
   //       await this._readUntil('> ', 500);
   //       await this._port.write('D\r');
   //       const data = '';
@@ -170,40 +180,6 @@ export default class Connection {
    */
   eval(expression: string): Promise<Result> {
     return this.exec(`print(${expression},end='')`);
-  }
-
-  /**
-   * Execute Python code interactively on the board.
-   * @param code The code to execute.
-   * @param readCallback The port read callback.
-   */
-  async interactivelyExec(
-    code: string,
-    readCallback: ReadCallback,
-  ): Promise<void> {
-    try {
-      await this._lock<void>(async () => {
-        readCallback('');
-        if (code === '') {
-          return;
-        }
-        await this._readUntil('>', 500);
-        await this._port.write(code + '\x04');
-        await this._readUntil('OK', 500);
-        for (let i = 0; i < 2; i++) {
-          for (;;) {
-            const data = await this._port.read(1);
-            if (data === '\x04') {
-              break;
-            }
-            readCallback(data);
-          }
-        }
-      });
-    } catch (err) {
-      await this.init();
-      throw err;
-    }
   }
 
   /**

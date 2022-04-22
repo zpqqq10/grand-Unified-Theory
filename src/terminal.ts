@@ -17,13 +17,13 @@ export default class ESP32Pty implements vscode.Pseudoterminal {
   async open(
     initialDimensions: vscode.TerminalDimensions | undefined,
   ): Promise<void> {
-    if (connection === undefined) {
+    if (!connection) {
       throw util.ESP32Error.noConnection();
     }
     if (!this._isFile) {
       this._emitter.fire(`> ${this._code}\r\n`);
     }
-    await connection.interactivelyExec(this._code, (data: string) => {
+    await connection.exec(this._code, (data: string) => {
       this._finished = false;
       this._emitter.fire(data);
     });
@@ -35,7 +35,7 @@ export default class ESP32Pty implements vscode.Pseudoterminal {
     if (this._finished) {
       return;
     }
-    if (connection === undefined) {
+    if (!connection) {
       throw util.ESP32Error.noConnection();
     }
     for (; !this._finished; ) {
@@ -48,7 +48,7 @@ export default class ESP32Pty implements vscode.Pseudoterminal {
     if (this._finished) {
       return;
     }
-    if (connection === undefined) {
+    if (!connection) {
       throw util.ESP32Error.noConnection();
     }
     await connection.dangerouslyWrite(data);

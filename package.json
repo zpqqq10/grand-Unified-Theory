@@ -54,7 +54,7 @@
       },
       {
         "command": "micropython-esp32.configWebREPL",
-        "title": "Configure WebREPL with serial port connected",
+        "title": "Configure WebREPL with Serial Port Connected",
         "category": "MicroPython-ESP32"
       }
     ],
@@ -65,12 +65,12 @@
           "micropython-esp32.local.path": {
             "type": "string",
             "default": "./",
-            "description": "Specifies the path to save teh information of the WS.",
-            "order": 10
+            "description": "Specifies the path to save the configuration of the WebREPL.",
+            "order": 0
           },
           "micropython-esp32.connection.serial.path": {
             "type": "string",
-            "default": "COM7",
+            "default": "",
             "description": "Specifies the path of the serial port.",
             "order": 10
           },
@@ -82,26 +82,26 @@
           },
           "micropython-esp32.connection.websock.url": {
             "type": "string",
-            "default": "ws://192.168.4.1:8266/",
+            "default": "",
             "description": "Specifies the URL of the WebSocket.",
             "order": 20
           },
           "micropython-esp32.connection.websock.password": {
             "type": "string",
-            "default": "password",
+            "default": "",
             "description": "Specifies the password of the WebREPL.",
             "order": 21
           },
           "micropython-esp32.connection.websock.net": {
             "type": "string",
-            "default": "pqqqq",
-            "description": "Specifies network that PC and ESP32 both connects to.",
+            "default": "",
+            "description": "Specifies the network that PC and ESP32 both connect to.",
             "order": 22
           },
           "micropython-esp32.connection.websock.netpw": {
             "type": "string",
-            "default": "z1235789",
-            "description": "Specifies the password of the network that PC and ESP32 both connects to.",
+            "default": "",
+            "description": "Specifies the password of the network that PC and ESP32 both connect to.",
             "order": 23
           }
         }
@@ -138,7 +138,7 @@
         },
         {
           "command": "micropython-esp32.configWebREPL",
-          "when": "workbenchState == workspace && micropython-esp32.connected"
+          "when": "workbenchState == workspace && micropython-esp32.connected && micropython-esp32.connectionType == serial"
         }
       ],
       "editor/title": [

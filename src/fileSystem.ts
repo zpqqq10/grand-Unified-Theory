@@ -22,9 +22,7 @@ export default class ESP32FS implements vscode.FileSystemProvider {
       throw util.ESP32Error.noConnection();
     }
     const { data, err } = await connection.exec(
-      `
-f=os.stat('${uri.path}')
-print('{}/{}/{}/{}'.format('f'if f[0]&0x8000 else'd',f[9],f[8],f[6]))`,
+      `f=os.stat('${uri.path}')\nprint('{}/{}/{}/{}'.format('f'if f[0]&0x8000 else'd',f[9],f[8],f[6]))`,
     );
     if (err) {
       throw vscode.FileSystemError.FileNotFound(uri);
@@ -46,9 +44,7 @@ print('{}/{}/{}/{}'.format('f'if f[0]&0x8000 else'd',f[9],f[8],f[6]))`,
       throw vscode.FileSystemError.FileNotADirectory(uri);
     }
     const { data, err } = await connection.exec(
-      `
-for f in os.ilistdir('${uri.path}'):
- print('{}/{}'.format(f[0],'f'if f[1]&0x8000 else'd'))`,
+      `for f in os.ilistdir('${uri.path}'):\n print('{}/{}'.format(f[0],'f'if f[1]&0x8000 else'd'))`,
     );
     if (err) {
       throw vscode.FileSystemError.FileNotFound(uri);
@@ -120,10 +116,9 @@ for f in os.ilistdir('${uri.path}'):
       throw vscode.FileSystemError.FileExists(uri);
     }
     const { err } = await connection.exec(
-      `
-f=open('${uri.path}','wb')
-f.write(b${JSON.stringify(content.toString().replace(/\r/g, ''))})
-f.close()`,
+      `f=open('${uri.path}','wb')\nf.write(b${JSON.stringify(
+        content.toString().replace(/\r/g, ''),
+      )})\nf.close()`,
     );
     if (err) {
       throw vscode.FileSystemError.FileNotFound(uri);
@@ -146,10 +141,9 @@ f.close()`,
       throw vscode.FileSystemError.FileIsADirectory(uri);
     }
     const { err } = await connection.exec(
-      `
-f=open('${uri.path}','ab')
-f.write(b${JSON.stringify(content.toString().replace(/\r/g, ''))})
-f.close()`,
+      `f=open('${uri.path}','ab')\nf.write(b${JSON.stringify(
+        content.toString().replace(/\r/g, ''),
+      )})\nf.close()`,
     );
     if (err) {
       throw vscode.FileSystemError.FileNotFound(uri);

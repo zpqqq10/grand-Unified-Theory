@@ -78,11 +78,11 @@ export default class Connection {
   async init(): Promise<void> {
     await this._lock<void>(async () => {
       for (;;) {
-        await this._port.write('\r\x03\x03');
+        await this._port.write('\x03\x03');
         for (; this._port.readableLength > 0; ) {
           await this._port.read(this._port.readableLength);
         }
-        await this._port.write('\r\x01');
+        await this._port.write('\x01');
         try {
           await this._readUntil('raw REPL; CTRL-B to exit\r\n', 500);
           return;
@@ -141,28 +141,28 @@ export default class Connection {
   //       }
   //       await this._port.write('import webrepl_setup\x04');
   //       await this._readUntil('> ', 500);
-  //       await this._port.write('E\r');
+  //       await this._port.write('E\n');
   //       if(existed){
   //         // change password?
   //         await this._readUntil('password? (y/n) ', 500);
-  //         await this._port.write('y\r');
+  //         await this._port.write('y\n');
   //       }
   //       else{
   //         // new password
   //       }
   //       await this._readUntil('(4-9 chars): ', 500);
-  //       await this._port.write(password+'\r');
+  //       await this._port.write(password+'\n');
   //       await this._readUntil('Confirm password: ', 500);
-  //       await this._port.write(password+'\r');
+  //       await this._port.write(password+'\n');
   //       await this._readUntil('reboot now? (y/n) ', 500);
-  //       await this._port.write('y\r');
+  //       await this._port.write('y\n');
   //       // reboot
   //       // reenter raw-repl
   //       await this.init();
   //       console.log('444444444444444444444');
   //       await this._port.write('import webrepl_setup\x04');
   //       await this._readUntil('> ', 500);
-  //       await this._port.write('D\r');
+  //       await this._port.write('D\n');
   //       const data = '';
   //       const err = '';
   //       return { data, err };

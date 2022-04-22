@@ -356,25 +356,14 @@ export function activate(context: vscode.ExtensionContext) {
     }
     // connect to the LAN first
     const lan = `('${lanname}', '${pw}')`;
-    const connectWLAN = `
-import network
-wlan = network.WLAN(network.STA_IF)
-wlan.active(True)
-if wlan.isconnected():
- wlan.disconnect()
-wlan.connect${lan}
-import webrepl`;
+    const connectWLAN = `import network\nwlan = network.WLAN(network.STA_IF)\nwlan.active(True)\nif wlan.isconnected():\n wlan.disconnect()\nwlan.connect${lan}\nimport webrepl`;
     await connection.exec(connectWLAN);
     const { data } = await connection.exec('webrepl.start()');
     const wsurl = data.match(/ws:\/\/\d+\.\d+\.\d+\.\d+:\d+/)?.toString();
     // TODO: remove commented commands
     esp32Fs.appendFile(
       vscode.Uri.file('boot.py'),
-      Buffer.from(
-        `
-${connectWLAN}
-webrepl.start()`,
-      ),
+      Buffer.from(`${connectWLAN}\nwebrepl.start()`),
     );
     await connection.exec('import machine');
     await connection.dangerouslyWrite('machine.reset()\x04');

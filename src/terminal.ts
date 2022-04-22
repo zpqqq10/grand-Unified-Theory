@@ -39,7 +39,7 @@ export default class ESP32Pty implements vscode.Pseudoterminal {
       throw util.ESP32Error.noConnection();
     }
     for (; !this._finished; ) {
-      await connection.dangerouslyWrite('\r\x03\x03');
+      await connection.dangerouslyWrite('\x03\x03');
       await util.sleep(500);
     }
   }
@@ -51,6 +51,13 @@ export default class ESP32Pty implements vscode.Pseudoterminal {
     if (!connection) {
       throw util.ESP32Error.noConnection();
     }
-    await connection.dangerouslyWrite(data);
+    if (
+      data !== '\x01' &&
+      data !== '\x02' &&
+      data !== '\x04' &&
+      data !== '\x05'
+    ) {
+      await connection.dangerouslyWrite(data);
+    }
   }
 }

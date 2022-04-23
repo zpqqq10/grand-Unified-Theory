@@ -306,76 +306,79 @@ export function activate(context: vscode.ExtensionContext) {
    * Assume that PC has connected to the LAN already.
    */
   const configWebREPL: () => void = async () => {
-    const config = vscode.workspace.getConfiguration(
-      'micropython-esp32.connection.websock',
-    );
-    const lanname = await vscode.window.showInputBox({
-      title: 'Input the name of the LAN to connect',
-      value: config.get('net'),
-    });
-    const pw = await vscode.window.showInputBox({
-      title: 'Input the password of the LAN to connect',
-      value: config.get('netpw'),
-      password: true,
-    });
-    // save name and password
-    const name = await vscode.window.showInputBox({
-      title: 'Input the name of the board',
-    });
-    let password: string | undefined = '';
-    while (
-      password !== undefined &&
-      (password.length < 4 || password.length > 9)
-    ) {
-      password = await vscode.window.showInputBox({
-        title: 'Input the password (4-9 chars) of the WebREPL',
+    try {
+      if (!connection) {
+        throw util.ESP32Error.noConnection();
+      }
+      const config = vscode.workspace.getConfiguration(
+        'micropython-esp32.connection.websock',
+      );
+      const lanname = await vscode.window.showInputBox({
+        title: 'Input the name of the LAN to connect',
+        value: config.get('net'),
+      });
+      const pw = await vscode.window.showInputBox({
+        title: 'Input the password of the LAN to connect',
+        value: config.get('netpw'),
         password: true,
       });
-    }
-    if (!lanname || pw === undefined || name === undefined || !password) {
-      return;
-    }
-    if (!connection) {
-      return;
-    }
-    try {
-      await esp32Fs.stat(vscode.Uri.file('./webrepl_cfg.py'));
-      // overwrite
-      await esp32Fs.writeFile(
-        vscode.Uri.file('./webrepl_cfg.py'),
-        Buffer.from(`PASS='${password}'`),
-        { create: false, overwrite: true },
+      // save name and password
+      const name = await vscode.window.showInputBox({
+        title: 'Input the name of the board',
+      });
+      let password: string | undefined = '';
+      for (
+        ;
+        password !== undefined && (password.length < 4 || password.length > 9);
+        password = await vscode.window.showInputBox({
+          title: 'Input the password (4-9 chars) of the WebREPL',
+          password: true,
+        })
+      ) {}
+      if (!lanname || pw === undefined || name === undefined || !password) {
+        return;
+      }
+      try {
+        await esp32Fs.stat(vscode.Uri.file('./webrepl_cfg.py'));
+        // overwrite
+        await esp32Fs.writeFile(
+          vscode.Uri.file('./webrepl_cfg.py'),
+          Buffer.from(`PASS='${password}'`),
+          { create: false, overwrite: true },
+        );
+      } catch {
+        // create
+        await esp32Fs.writeFile(
+          vscode.Uri.file('./webrepl_cfg.py'),
+          Buffer.from(`PASS='${password}'`),
+          { create: true, overwrite: false },
+        );
+      }
+      // connect to the LAN first
+      const lan = `('${lanname}', '${pw}')`;
+      const connectWLAN = `import network\nwlan = network.WLAN(network.STA_IF)\nwlan.active(True)\nif wlan.isconnected():\n wlan.disconnect()\nwlan.connect${lan}\nimport webrepl`;
+      await connection.exec(connectWLAN);
+      const data = await connection.exec('webrepl.start()');
+      const wsurl = data.match(/ws:\/\/\d+\.\d+\.\d+\.\d+:\d+/)?.toString();
+      // TODO: remove commented commands
+      esp32Fs.writeFile(
+        vscode.Uri.file('boot.py'),
+        Buffer.from(`${connectWLAN}\nwebrepl.start()`),
+        { create: true, overwrite: true, append: true },
       );
-    } catch {
-      // create
-      await esp32Fs.writeFile(
-        vscode.Uri.file('./webrepl_cfg.py'),
-        Buffer.from(`PASS='${password}'`),
-        { create: true, overwrite: false },
-      );
-    }
-    // connect to the LAN first
-    const lan = `('${lanname}', '${pw}')`;
-    const connectWLAN = `import network\nwlan = network.WLAN(network.STA_IF)\nwlan.active(True)\nif wlan.isconnected():\n wlan.disconnect()\nwlan.connect${lan}\nimport webrepl`;
-    await connection.exec(connectWLAN);
-    const { data } = await connection.exec('webrepl.start()');
-    const wsurl = data.match(/ws:\/\/\d+\.\d+\.\d+\.\d+:\d+/)?.toString();
-    // TODO: remove commented commands
-    esp32Fs.appendFile(
-      vscode.Uri.file('boot.py'),
-      Buffer.from(`${connectWLAN}\nwebrepl.start()`),
-    );
-    await connection.exec('import machine');
-    await connection.dangerouslyWrite('machine.reset()\x04');
-    await connection.init();
-    if (wsurl) {
+      await connection.exec('import machine');
+      await connection.dangerouslyWrite('machine.reset()\x04');
+      await connection.init();
+      if (!wsurl) {
+        throw new Error(
+          'WebSocket is NOT open and the configuration is not saved!',
+        );
+      }
       _saveJSON(name, wsurl, password);
       vscode.window.showInformationMessage(`URL: ${wsurl}`);
       vscode.window.showInformationMessage('Configure WebREPL successfully!');
-    } else {
-      vscode.window.showErrorMessage(
-        'WebSocket is NOT open and the configuration is not saved!',
-      );
+    } catch (err: any) {
+      vscode.window.showErrorMessage(err.message);
     }
   };
 

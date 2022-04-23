@@ -21,12 +21,9 @@ export default class ESP32FS implements vscode.FileSystemProvider {
     if (!connection) {
       throw util.ESP32Error.noConnection();
     }
-    const { data, err } = await connection.exec(
+    const data = await connection.exec(
       `f=os.stat('${uri.path}')\nprint('{}/{}/{}/{}'.format('f'if f[0]&0x8000 else'd',f[9],f[8],f[6]))`,
     );
-    if (err) {
-      throw vscode.FileSystemError.FileNotFound(uri);
-    }
     const stat = data.trim().split('/');
     return {
       type: stat[0] === 'f' ? vscode.FileType.File : vscode.FileType.Directory,
@@ -43,12 +40,9 @@ export default class ESP32FS implements vscode.FileSystemProvider {
     if ((await this.stat(uri)).type !== vscode.FileType.Directory) {
       throw vscode.FileSystemError.FileNotADirectory(uri);
     }
-    const { data, err } = await connection.exec(
+    const data = await connection.exec(
       `for f in os.ilistdir('${uri.path}'):\n print('{}/{}'.format(f[0],'f'if f[1]&0x8000 else'd'))`,
     );
-    if (err) {
-      throw vscode.FileSystemError.FileNotFound(uri);
-    }
     return data
       .trim()
       .split('\r\n')
@@ -73,10 +67,7 @@ export default class ESP32FS implements vscode.FileSystemProvider {
     if (stat) {
       throw vscode.FileSystemError.FileExists(uri);
     }
-    const { err } = await connection.exec(`os.mkdir('${uri.path}')`);
-    if (err) {
-      throw vscode.FileSystemError.FileNotFound(uri);
-    }
+    await connection.exec(`os.mkdir('${uri.path}')`);
     this._emitter.fire([{ type: vscode.FileChangeType.Created, uri }]);
   }
 
@@ -87,17 +78,18 @@ export default class ESP32FS implements vscode.FileSystemProvider {
     if ((await this.stat(uri)).type === vscode.FileType.Directory) {
       throw vscode.FileSystemError.FileIsADirectory(uri);
     }
-    const { data, err } = await connection.eval(`open('${uri.path}').read()`);
-    if (err) {
-      throw vscode.FileSystemError.FileNotFound(uri);
-    }
+    const data = await connection.eval(`open('${uri.path}').read()`);
     return Buffer.from(data);
   }
 
   async writeFile(
     uri: vscode.Uri,
     content: Uint8Array,
-    options: { readonly create: boolean; readonly overwrite: boolean },
+    options: {
+      readonly create: boolean;
+      readonly overwrite: boolean;
+      readonly append?: boolean;
+    },
   ): Promise<void> {
     if (!connection) {
       throw util.ESP32Error.noConnection();
@@ -115,39 +107,36 @@ export default class ESP32FS implements vscode.FileSystemProvider {
     if (stat && options.create && !options.overwrite) {
       throw vscode.FileSystemError.FileExists(uri);
     }
-    const { err } = await connection.exec(
-      `f=open('${uri.path}','wb')\nf.write(b${JSON.stringify(
-        content.toString().replace(/\r/g, ''),
-      )})\nf.close()`,
+    await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: 'Saving file on the board',
+      },
+      (progress) => {
+        if (!connection) {
+          throw util.ESP32Error.noConnection();
+        }
+        return connection.lock(async () => {
+          if (!connection) {
+            throw util.ESP32Error.noConnection();
+          }
+          await connection.dangerouslyExec(
+            `f=open('${uri.path}','${options.append ? 'a' : 'w'}b')\nw=f.write`,
+          );
+          for (
+            let data = content.toString().replace(/\r/g, ''), { length } = data;
+            data;
+            data = data.slice(500)
+          ) {
+            await connection.dangerouslyExec(
+              `w(b${JSON.stringify(data.slice(0, 500))})`,
+            );
+            progress.report({ increment: 50000 / length });
+          }
+          await connection.dangerouslyExec(`f.close()`);
+        });
+      },
     );
-    if (err) {
-      throw vscode.FileSystemError.FileNotFound(uri);
-    }
-    if (!stat) {
-      this._emitter.fire([{ type: vscode.FileChangeType.Created, uri }]);
-    }
-    this._emitter.fire([{ type: vscode.FileChangeType.Changed, uri }]);
-  }
-
-  async appendFile(uri: vscode.Uri, content: Uint8Array): Promise<void> {
-    if (!connection) {
-      throw util.ESP32Error.noConnection();
-    }
-    let stat: vscode.FileStat | undefined = undefined;
-    try {
-      stat = await this.stat(uri);
-    } catch {}
-    if (stat?.type === vscode.FileType.Directory) {
-      throw vscode.FileSystemError.FileIsADirectory(uri);
-    }
-    const { err } = await connection.exec(
-      `f=open('${uri.path}','ab')\nf.write(b${JSON.stringify(
-        content.toString().replace(/\r/g, ''),
-      )})\nf.close()`,
-    );
-    if (err) {
-      throw vscode.FileSystemError.FileNotFound(uri);
-    }
     if (!stat) {
       this._emitter.fire([{ type: vscode.FileChangeType.Created, uri }]);
     }
@@ -161,12 +150,8 @@ export default class ESP32FS implements vscode.FileSystemProvider {
     if (!connection) {
       throw util.ESP32Error.noConnection();
     }
-    const stat = await this.stat(uri);
-    if (stat.type !== vscode.FileType.Directory) {
-      const { err } = await connection.exec(`os.remove('${uri.path}')`);
-      if (err) {
-        throw vscode.FileSystemError.FileNotFound(uri);
-      }
+    if ((await this.stat(uri)).type !== vscode.FileType.Directory) {
+      await connection.exec(`os.remove('${uri.path}')`);
     } else {
       if (!options.recursive) {
         throw vscode.FileSystemError.FileIsADirectory(uri);
@@ -177,10 +162,7 @@ export default class ESP32FS implements vscode.FileSystemProvider {
           recursive: true,
         });
       }
-      const { err } = await connection.exec(`os.rmdir('${uri.path}')`);
-      if (err) {
-        throw vscode.FileSystemError.FileNotFound(uri);
-      }
+      await connection.exec(`os.rmdir('${uri.path}')`);
     }
     this._emitter.fire([{ type: vscode.FileChangeType.Deleted, uri }]);
   }
@@ -200,12 +182,7 @@ export default class ESP32FS implements vscode.FileSystemProvider {
     if (stat && !options.overwrite) {
       throw vscode.FileSystemError.FileExists(newUri);
     }
-    const { err } = await connection.exec(
-      `os.rename('${oldUri.path}','${newUri.path}')`,
-    );
-    if (err) {
-      throw vscode.FileSystemError.FileNotFound(oldUri);
-    }
+    await connection.exec(`os.rename('${oldUri.path}','${newUri.path}')`);
     this._emitter.fire([
       { type: vscode.FileChangeType.Deleted, uri: oldUri },
       { type: vscode.FileChangeType.Created, uri: newUri },

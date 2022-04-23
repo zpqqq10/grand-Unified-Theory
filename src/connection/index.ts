@@ -5,11 +5,6 @@ import * as util from '../util';
 
 type ConnectionOptions = SerialOptions | WebSockOptions;
 
-interface Result {
-  data: string;
-  err: string;
-}
-
 interface ReadCallback {
   (data: string): void;
 }
@@ -40,7 +35,7 @@ export default class Connection {
   /**
    * Lock the port to ensure at most one ongoing operation.
    */
-  private async _lock<T>(callback: () => Promise<T>): Promise<T> {
+  async lock<T>(callback: () => Promise<T>): Promise<T> {
     for (; this._locking; ) {
       await util.sleep(1);
     }
@@ -75,21 +70,55 @@ export default class Connection {
   /**
    * Initialize the board.
    */
-  async init(): Promise<void> {
-    await this._lock<void>(async () => {
+  init(): Promise<void> {
+    return this.lock(async () => {
       for (;;) {
-        await this._port.write('\x03\x03');
-        for (; this._port.readableLength > 0; ) {
-          await this._port.read(this._port.readableLength);
-        }
-        await this._port.write('\x01');
         try {
+          await this._port.write('\x03\x03');
+          for (; this._port.readableLength > 0; ) {
+            await this._port.read(this._port.readableLength);
+          }
+          await this._port.write('\x01');
           await this._readUntil('raw REPL; CTRL-B to exit\r\n', 500);
-          return;
+          break;
         } catch {}
       }
+      await this.dangerouslyExec('import os');
     });
-    await this.exec('import os');
+  }
+
+  /**
+   * Execute Python code on the board without locking.
+   * @param code The code to execute.
+   * @param readCallback The port read callback.
+   * @returns The execution result.
+   */
+  async dangerouslyExec(
+    code: string,
+    readCallback?: ReadCallback,
+  ): Promise<string> {
+    let data = '';
+    let err = '';
+    if (code) {
+      await this._readUntil('>', 500);
+      await this._port.write(`${code}\x04`);
+      await this._readUntil('OK', 500);
+      readCallback && readCallback('');
+      for (let i = 0; i < 2; i++) {
+        for (;;) {
+          const s = await this._port.read(1);
+          if (s === '\x04') {
+            break;
+          }
+          i ? (err += s) : (data += s);
+          readCallback && readCallback(s);
+        }
+      }
+    }
+    if (err) {
+      throw new Error(err);
+    }
+    return data;
   }
 
   /**
@@ -98,33 +127,17 @@ export default class Connection {
    * @param readCallback The port read callback.
    * @returns The execution result.
    */
-  async exec(code: string, readCallback?: ReadCallback): Promise<Result> {
-    try {
-      return await this._lock<Result>(async () => {
-        let data = '';
-        let err = '';
-        if (code) {
-          await this._readUntil('>', 500);
-          await this._port.write(`${code}\x04`);
-          await this._readUntil('OK', 500);
-          readCallback && readCallback('');
-          for (let i = 0; i < 2; i++) {
-            for (;;) {
-              const s = await this._port.read(1);
-              if (s === '\x04') {
-                break;
-              }
-              i === 0 ? (data += s) : (err += s);
-              readCallback && readCallback(s);
-            }
-          }
-        }
-        return { data, err };
-      });
-    } catch (err) {
-      await this.init();
-      throw err;
-    }
+  exec(code: string, readCallback?: ReadCallback): Promise<string> {
+    return this.lock(() => this.dangerouslyExec(code, readCallback));
+  }
+
+  /**
+   * Evalute the result of an expression.
+   * @param expression The expression to evaluate.
+   * @returns The evaluation result.
+   */
+  eval(expression: string): Promise<string> {
+    return this.exec(`print(${expression},end='')`);
   }
 
   /**
@@ -133,54 +146,39 @@ export default class Connection {
    * @param existed Whether there is a webreplcfg.py.
    * @returns The execution result.
    */
-  //  async configWebREPL(password: string, existed: boolean): Promise<Result> {
-  //   try {
-  //     return await this._lock<Result>(async () => {
-  //       if (!password) {
-  //         return { data: '', err: '' };
-  //       }
-  //       await this._port.write('import webrepl_setup\x04');
-  //       await this._readUntil('> ', 500);
-  //       await this._port.write('E\n');
-  //       if(existed){
-  //         // change password?
-  //         await this._readUntil('password? (y/n) ', 500);
-  //         await this._port.write('y\n');
-  //       }
-  //       else{
-  //         // new password
-  //       }
-  //       await this._readUntil('(4-9 chars): ', 500);
-  //       await this._port.write(password+'\n');
-  //       await this._readUntil('Confirm password: ', 500);
-  //       await this._port.write(password+'\n');
-  //       await this._readUntil('reboot now? (y/n) ', 500);
+  // configWebREPL(password: string, existed: boolean): Promise<Result> {
+  //   return this.lock(async () => {
+  //     if (!password) {
+  //       return { data: '', err: '' };
+  //     }
+  //     await this._port.write('import webrepl_setup\x04');
+  //     await this._readUntil('> ', 500);
+  //     await this._port.write('E\n');
+  //     if (existed) {
+  //       // change password?
+  //       await this._readUntil('password? (y/n) ', 500);
   //       await this._port.write('y\n');
-  //       // reboot
-  //       // reenter raw-repl
-  //       await this.init();
-  //       console.log('444444444444444444444');
-  //       await this._port.write('import webrepl_setup\x04');
-  //       await this._readUntil('> ', 500);
-  //       await this._port.write('D\n');
-  //       const data = '';
-  //       const err = '';
-  //       return { data, err };
-  //     });
-  //   } catch (err) {
+  //     } else {
+  //       // new password
+  //     }
+  //     await this._readUntil('(4-9 chars): ', 500);
+  //     await this._port.write(password + '\n');
+  //     await this._readUntil('Confirm password: ', 500);
+  //     await this._port.write(password + '\n');
+  //     await this._readUntil('reboot now? (y/n) ', 500);
+  //     await this._port.write('y\n');
+  //     // reboot
+  //     // reenter raw-repl
   //     await this.init();
-  //     throw err;
-  //   }
+  //     console.log('444444444444444444444');
+  //     await this._port.write('import webrepl_setup\x04');
+  //     await this._readUntil('> ', 500);
+  //     await this._port.write('D\n');
+  //     const data = '';
+  //     const err = '';
+  //     return { data, err };
+  //   });
   // }
-
-  /**
-   * Evalute the result of an expression.
-   * @param expression The expression to evaluate.
-   * @returns The evaluation result.
-   */
-  eval(expression: string): Promise<Result> {
-    return this.exec(`print(${expression},end='')`);
-  }
 
   /**
    * Write bytes to the port without locking.

@@ -44,7 +44,7 @@ export default class Serial implements Port {
     return new Promise((resolve, reject) => {
       this._serialport.write(data);
       this._serialport.drain((err) => {
-        if (err !== null) {
+        if (err) {
           reject(err);
         } else {
           console.log('serial write', data);
@@ -57,7 +57,7 @@ export default class Serial implements Port {
   close(): Promise<void> {
     return new Promise((resolve, reject) => {
       this._serialport.close((err) => {
-        if (err !== null) {
+        if (err) {
           reject(err);
         } else {
           console.log('serial close');

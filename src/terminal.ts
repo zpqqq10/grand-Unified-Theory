@@ -23,10 +23,12 @@ export default class ESP32Pty implements vscode.Pseudoterminal {
     if (!this._isFile) {
       this._emitter.fire(`> ${this._code}\r\n`);
     }
-    await connection.exec(this._code, (data: string) => {
-      this._finished = false;
-      this._emitter.fire(data);
-    });
+    try {
+      await connection.exec(this._code, (data: string) => {
+        this._finished = false;
+        this._emitter.fire(data);
+      });
+    } catch {}
     this._finished = true;
     this._emitter.fire('> Finished <');
   }

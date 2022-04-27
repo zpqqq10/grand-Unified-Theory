@@ -334,7 +334,7 @@ export function activate(context: vscode.ExtensionContext) {
           title: 'Input the password (4-9 chars) of the WebREPL',
           password: true,
         })
-      ) {}
+      ) { }
       if (!lanname || pw === undefined || name === undefined || !password) {
         return;
       }
@@ -356,27 +356,51 @@ export function activate(context: vscode.ExtensionContext) {
       }
       // connect to the LAN first
       const lan = `('${lanname}', '${pw}')`;
+      const content = `
+import network
+import time
+import webrepl
+wlan = network.WLAN(network.STA_IF)
+wlan.active(True)
+if wlan.isconnected():
+  wlan.disconnect()
+wlan.connect${lan}
+maxtries = 9
+while maxtries >0:
+  if wlan.isconnected():
+    webrepl.start()
+    break
+  maxtries = maxtries - 1
+  time.sleep_ms(500)
+`;
       const connectWLAN = `import network\nwlan = network.WLAN(network.STA_IF)\nwlan.active(True)\nif wlan.isconnected():\n wlan.disconnect()\nwlan.connect${lan}\nimport webrepl`;
       await connection.exec(connectWLAN);
-      const data = await connection.exec('webrepl.start()');
-      const wsurl = data.match(/ws:\/\/\d+\.\d+\.\d+\.\d+:\d+/)?.toString();
-      // TODO: remove commented commands
-      esp32Fs.writeFile(
-        vscode.Uri.file('boot.py'),
-        Buffer.from(`${connectWLAN}\nwebrepl.start()`),
-        { create: true, overwrite: true, append: true },
-      );
-      await connection.exec('import machine');
-      await connection.dangerouslyWrite('machine.reset()\x04');
-      await connection.init();
-      if (!wsurl) {
-        throw new Error(
-          'WebSocket is NOT open and the configuration is not saved!',
+      // waiting for connecting
+      setTimeout(async function () {
+        if (!connection) {
+          throw util.ESP32Error.noConnection();
+        }
+        const data = await connection.exec('webrepl.start()');
+        const wsurl = data.match(/ws:\/\/\d+\.\d+\.\d+\.\d+:\d+/)?.toString();
+        // TODO: remove commented commands
+        if (!wsurl || /0\.0\.0\.0/.test(wsurl)) {
+          vscode.window.showErrorMessage('here');
+          throw new Error(
+            'WebSocket is NOT open and the configuration is not saved!',
+          );
+        }
+        esp32Fs.writeFile(
+          vscode.Uri.file('boot.py'),
+          Buffer.from(content),
+          { create: true, overwrite: true, append: true },
         );
-      }
-      _saveJSON(name, wsurl, password);
-      vscode.window.showInformationMessage(`URL: ${wsurl}`);
-      vscode.window.showInformationMessage('Configure WebREPL successfully!');
+        if(!password){
+          return ;
+        }
+        _saveJSON(name, wsurl, password);
+        vscode.window.showInformationMessage(`URL: ${wsurl}`);
+        vscode.window.showInformationMessage('Configure WebREPL successfully!');
+      }, 3000);
     } catch (err: any) {
       vscode.window.showErrorMessage(err.message);
     }

@@ -6,6 +6,7 @@ import Connection, { connection, setConnection } from './connection';
 import ESP32FS from './fileSystem';
 import ESP32Pty from './terminal';
 import * as util from './util';
+// import WebSock from './connection/websock';
 
 // this method is called when your extension is activated
 // your extension is activated the very first time the command is executed
@@ -15,6 +16,16 @@ export function activate(context: vscode.ExtensionContext) {
   console.log(
     'Congratulations, your extension "micropython-esp32" is now active!',
   );
+  
+  // let s = new WebSock({
+  //   type: 'websock',
+  //   url: 'ws://192.168.246.82:8266',
+  //   password: '5729',
+  //   onError: (err) => {
+  //     console.log("[error] WebSocket Error", err);
+  //   }
+  // });
+
 
   /**
    * The status bar that displays connection state.

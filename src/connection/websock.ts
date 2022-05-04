@@ -9,7 +9,8 @@ export interface WebSockOptions {
   type: 'websock';
   url: string;
   password: string;
-  wsError: (err: ErrorEvent) => void;
+  onError: (err: Error | ErrorEvent) => void;
+  init: () => Promise<void>;
 }
 
 export default class WebSock implements Port {
@@ -34,26 +35,13 @@ export default class WebSock implements Port {
         this._socket.send('\r\n');
       }
       else if (msg.data.toString() === '\r\nWebREPL connected\r\n>>> ') {
-        if (connection) {
-          await connection.init();
-          statusBarItem.text =  `Connected ${connection.address}`;
-          vscode.commands.executeCommand(
-            'setContext',
-            'micropython-esp32.connected',
-            true,
-          );
-          vscode.commands.executeCommand(
-            'setContext',
-            'micropython-esp32.connectionType',
-            connection.type,
-          );
-        }
+        await options.init();
       }
       else {
         this._receiveData = this._receiveData.concat(msg.data.toString());
       }
     };
-    this._socket.onerror = options.wsError;
+    this._socket.onerror = options.onError;
   }
 
   get readableLength(): number {

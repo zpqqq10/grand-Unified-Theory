@@ -26,7 +26,6 @@ export function activate(context: vscode.ExtensionContext) {
    * The status bar that displays connection state.
    */
 
-
   /**
    * Initialize ESP32 file system workspace.
    */
@@ -89,7 +88,6 @@ export function activate(context: vscode.ExtensionContext) {
     }
     return util.ESP32Connection.websock(url, password);
   };
-
 
   /**
    * Connect to the board.
@@ -161,31 +159,10 @@ export function activate(context: vscode.ExtensionContext) {
           break;
         }
       }
-      if (!connection) {
-        return;
-      }
-      if (connection.type === 'serial') {
-        await connection.init();
-        statusBarItem.text = `Connected ${connection.address}`;
-        vscode.commands.executeCommand(
-          'setContext',
-          'micropython-esp32.connected',
-          true,
-        );
-        vscode.commands.executeCommand(
-          'setContext',
-          'micropython-esp32.connectionType',
-          connection.type,
-        );
-      }
     } catch (err: any) {
       vscode.window.showErrorMessage(err.message);
   };
 };
-  
-
-
-
 
   /**
    * Execute Python code.

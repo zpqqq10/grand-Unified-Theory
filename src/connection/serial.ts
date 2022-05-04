@@ -1,4 +1,5 @@
 import Port from './port';
+import { ErrorEvent } from 'ws';
 import { SerialPort } from 'serialport';
 import * as util from '../util';
 
@@ -6,7 +7,8 @@ export interface SerialOptions {
   type: 'serial';
   path: string;
   baudRate: string;
-  onError: (err: Error) => void;
+  onError: (err: Error | ErrorEvent) => void;
+  init: () => Promise<void>;
 }
 
 export default class Serial implements Port {
@@ -17,7 +19,7 @@ export default class Serial implements Port {
     this._serialport = new SerialPort({
       path: options.path,
       baudRate: parseInt(options.baudRate),
-    });
+    }, options.init);
     this._serialport.setEncoding('utf8');
     this._serialport.on('error', options.onError);
     this.address = `${options.path}, baud rate ${options.baudRate}`;

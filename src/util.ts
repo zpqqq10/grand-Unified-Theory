@@ -1,11 +1,13 @@
 import * as vscode from 'vscode';
 import Connection, { setConnection } from './connection';
 import { ErrorEvent } from 'ws';
+import { connection } from './connection';
+import { statusBarItem } from './extension';
 
 /**
  * The error handler for connection.
  */
-const onError: (err: Error) => void = (err) => {
+const onError: (err: Error | ErrorEvent) => void = (err) => {
   vscode.window.showErrorMessage(err.message);
   vscode.commands.executeCommand(
     'setContext',
@@ -16,16 +18,26 @@ const onError: (err: Error) => void = (err) => {
 };
 
 /**
- * The error handler for WebSocket connection.
- */
- const wsError: (err: ErrorEvent) => void = (err) => {
-  vscode.window.showErrorMessage(err.message);
+* Init Serial/WebSocket Port.
+* Require user to input URL and WebREPL password.
+* @returns The connection if successfully created, or `undefined` otherwise.
+*/
+const portInitFunc: () => Promise<void> = async () => {
+  if (!connection) {
+    return;
+  }
+  await connection.init();
+  statusBarItem.text = `Connected ${connection.address}`;
   vscode.commands.executeCommand(
     'setContext',
     'micropython-esp32.connected',
-    false,
+    true,
   );
-  setConnection(undefined);
+  vscode.commands.executeCommand(
+    'setContext',
+    'micropython-esp32.connectionType',
+    connection.type,
+  );
 };
 
 export class ESP32Connection {
@@ -35,6 +47,7 @@ export class ESP32Connection {
       path,
       baudRate,
       onError,
+      init: portInitFunc,
     });
   }
 
@@ -43,7 +56,8 @@ export class ESP32Connection {
       type: 'websock',
       url,
       password,
-      wsError,
+      onError,
+      init: portInitFunc,
     });
   }
 }

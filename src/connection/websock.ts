@@ -22,22 +22,18 @@ export default class WebSock implements Port {
     this._receiveData = "";
     this.address = options.url;
 
-    // console.log("[DEBUG] 开始建立连接", options.url);
     this._socket.onopen = async () => {
       console.log('WebSocket成功连接');
     };
 
     this._socket.onmessage = async (msg) => {
       console.log('接收到来自ESP32的消息：');
-      // console.log(msg);  // Only For Debug
       console.log(msg.data);
       if (msg.data.toString() === "Password: ") {
-        // console.log("Here!");
         this._socket.send(options.password);
         this._socket.send('\r\n');
       }
       else if (msg.data.toString() === '\r\nWebREPL connected\r\n>>> ') {
-        // console.log("Here 2!");
         if (connection) {
           await connection.init();
           statusBarItem.text =  `Connected ${connection.address}`;
@@ -56,7 +52,6 @@ export default class WebSock implements Port {
       else {
         this._receiveData = this._receiveData.concat(msg.data.toString());
       }
-      // console.log("[BUFFER]", this._receiveData);
     };
     this._socket.onerror = options.wsError;
   }

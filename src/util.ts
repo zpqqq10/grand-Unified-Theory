@@ -1,10 +1,24 @@
 import * as vscode from 'vscode';
 import Connection, { setConnection } from './connection';
+import { ErrorEvent } from 'ws';
 
 /**
  * The error handler for connection.
  */
 const onError: (err: Error) => void = (err) => {
+  vscode.window.showErrorMessage(err.message);
+  vscode.commands.executeCommand(
+    'setContext',
+    'micropython-esp32.connected',
+    false,
+  );
+  setConnection(undefined);
+};
+
+/**
+ * The error handler for WebSocket connection.
+ */
+ const wsError: (err: ErrorEvent) => void = (err) => {
   vscode.window.showErrorMessage(err.message);
   vscode.commands.executeCommand(
     'setContext',
@@ -29,7 +43,7 @@ export class ESP32Connection {
       type: 'websock',
       url,
       password,
-      onError,
+      wsError,
     });
   }
 }

@@ -1,12 +1,15 @@
 import Port from './port';
 import WebSocket, { ErrorEvent } from 'ws';
 import * as util from '../util';
+import * as vscode from 'vscode';
+import { connection } from '.';
+import { statusBarItem } from '../extension';
 
 export interface WebSockOptions {
   type: 'websock';
   url: string;
   password: string;
-  onError: (err: ErrorEvent) => void;
+  wsError: (err: ErrorEvent) => void;
 }
 
 export default class WebSock implements Port {
@@ -18,12 +21,13 @@ export default class WebSock implements Port {
     this._socket = new WebSocket(options.url);
     this._receiveData = "";
     this.address = options.url;
-    console.log("[DEBUG] 开始建立连接", options.url);
-    this._socket.onopen = function () {
+
+    // console.log("[DEBUG] 开始建立连接", options.url);
+    this._socket.onopen = async () => {
       console.log('WebSocket成功连接');
     };
 
-    this._socket.onmessage = (msg) => {
+    this._socket.onmessage = async (msg) => {
       console.log('接收到来自ESP32的消息：');
       // console.log(msg);  // Only For Debug
       console.log(msg.data);
@@ -32,16 +36,29 @@ export default class WebSock implements Port {
         this._socket.send(options.password);
         this._socket.send('\r\n');
       }
-      // else if (msg.data.toString() === '\r\nWebREPL connected\r\n>>> ') {
+      else if (msg.data.toString() === '\r\nWebREPL connected\r\n>>> ') {
         // console.log("Here 2!");
-        // this._socket.send('print(\"Hello, SoonWhy~\")\r\n');
-      // }
+        if (connection) {
+          await connection.init();
+          statusBarItem.text =  `Connected ${connection.address}`;
+          vscode.commands.executeCommand(
+            'setContext',
+            'micropython-esp32.connected',
+            true,
+          );
+          vscode.commands.executeCommand(
+            'setContext',
+            'micropython-esp32.connectionType',
+            connection.type,
+          );
+        }
+      }
       else {
         this._receiveData = this._receiveData.concat(msg.data.toString());
       }
       // console.log("[BUFFER]", this._receiveData);
     };
-    this._socket.onerror = options.onError;
+    this._socket.onerror = options.wsError;
   }
 
   get readableLength(): number {

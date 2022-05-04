@@ -126,12 +126,12 @@ export default class ESP32FS implements vscode.FileSystemProvider {
           for (
             let data = content.toString().replace(/\r/g, ''), { length } = data;
             data;
-            data = data.slice(500)
+            data = data.slice(200)
           ) {
             await connection.dangerouslyExec(
-              `w(b${JSON.stringify(data.slice(0, 500))})`,
+              `w(b${JSON.stringify(data.slice(0, 200))})`,
             );
-            progress.report({ increment: 50000 / length });
+            progress.report({ increment: 20000 / length });
           }
           await connection.dangerouslyExec(`f.close()`);
         });

@@ -6,7 +6,12 @@ import Connection, { connection, setConnection } from './connection';
 import ESP32FS from './fileSystem';
 import ESP32Pty from './terminal';
 import * as util from './util';
-// import WebSock from './connection/websock';
+
+export const statusBarItem = vscode.window.createStatusBarItem();
+statusBarItem.name = statusBarItem.tooltip = 'ESP32 Connection';
+statusBarItem.command = 'micropython-esp32.connect';
+statusBarItem.text = 'Disconnected';
+statusBarItem.show();
 
 // this method is called when your extension is activated
 // your extension is activated the very first time the command is executed
@@ -16,25 +21,11 @@ export function activate(context: vscode.ExtensionContext) {
   console.log(
     'Congratulations, your extension "micropython-esp32" is now active!',
   );
-  
-  // let s = new WebSock({
-  //   type: 'websock',
-  //   url: 'ws://192.168.246.82:8266',
-  //   password: '5729',
-  //   onError: (err) => {
-  //     console.log("[error] WebSocket Error", err);
-  //   }
-  // });
-
 
   /**
    * The status bar that displays connection state.
    */
-  const statusBarItem = vscode.window.createStatusBarItem();
-  statusBarItem.name = statusBarItem.tooltip = 'ESP32 Connection';
-  statusBarItem.command = 'micropython-esp32.connect';
-  statusBarItem.text = 'Disconnected';
-  statusBarItem.show();
+
 
   /**
    * Initialize ESP32 file system workspace.
@@ -99,6 +90,7 @@ export function activate(context: vscode.ExtensionContext) {
     return util.ESP32Connection.websock(url, password);
   };
 
+
   /**
    * Connect to the board.
    * Require user to choose connection type.
@@ -116,7 +108,7 @@ export function activate(context: vscode.ExtensionContext) {
           },
           {
             label: 'websock',
-            description: 'Through WebSocket (not supported yet)',
+            description: 'Through WebSocket',
           },
           {
             label: 'customSerial',
@@ -124,7 +116,7 @@ export function activate(context: vscode.ExtensionContext) {
           },
           {
             label: 'customWebsock',
-            description: 'Through custom WebSocket (not supported yet)',
+            description: 'Through custom WebSocket',
           },
         ],
         {
@@ -172,22 +164,28 @@ export function activate(context: vscode.ExtensionContext) {
       if (!connection) {
         return;
       }
-      await connection.init();
-      statusBarItem.text = `Connected ${connection.address}`;
-      vscode.commands.executeCommand(
-        'setContext',
-        'micropython-esp32.connected',
-        true,
-      );
-      vscode.commands.executeCommand(
-        'setContext',
-        'micropython-esp32.connectionType',
-        connection.type,
-      );
+      if (connection.type === 'serial') {
+        await connection.init();
+        statusBarItem.text = `Connected ${connection.address}`;
+        vscode.commands.executeCommand(
+          'setContext',
+          'micropython-esp32.connected',
+          true,
+        );
+        vscode.commands.executeCommand(
+          'setContext',
+          'micropython-esp32.connectionType',
+          connection.type,
+        );
+      }
     } catch (err: any) {
       vscode.window.showErrorMessage(err.message);
-    }
   };
+};
+  
+
+
+
 
   /**
    * Execute Python code.

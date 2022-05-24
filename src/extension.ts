@@ -277,9 +277,9 @@ export function activate(context: vscode.ExtensionContext) {
       ? JSON.parse(fs.readFileSync(path, 'utf-8'))
       : [];
     json.push({
-      boardname: boardname,
-      wsurl: wsurl,
-      webreplpw: webreplpw,
+      boardname,
+      wsurl,
+      webreplpw,
       date: _getTime(),
     });
     !fs.existsSync(path) && fs.mkdirSync(`${config.get('path')}/esp32`);
@@ -290,7 +290,7 @@ export function activate(context: vscode.ExtensionContext) {
    * Configure the WebREPL while the serial port is connected.
    * Assume that PC has connected to the LAN already.
    */
-  const configWebREPL: () => void = async () => {
+  const configWebREPL: () => Promise<void> = async () => {
     try {
       if (!connection) {
         throw util.ESP32Error.noConnection();
@@ -329,17 +329,17 @@ export function activate(context: vscode.ExtensionContext) {
         return;
       }
       try {
-        await esp32Fs.stat(vscode.Uri.file('./webrepl_cfg.py'));
+        await esp32Fs.stat(vscode.Uri.file('webrepl_cfg.py'));
         // overwrite
         await esp32Fs.writeFile(
-          vscode.Uri.file('./webrepl_cfg.py'),
+          vscode.Uri.file('webrepl_cfg.py'),
           Buffer.from(`PASS='${password}'\n`),
           { create: false, overwrite: true },
         );
       } catch {
         // create
         await esp32Fs.writeFile(
-          vscode.Uri.file('./webrepl_cfg.py'),
+          vscode.Uri.file('webrepl_cfg.py'),
           Buffer.from(`PASS='${password}'\n`),
           { create: true, overwrite: false },
         );
@@ -351,17 +351,9 @@ export function activate(context: vscode.ExtensionContext) {
       await connection.exec(connectWLAN);
       // waiting for connecting
       setTimeout(async () => {
-        if (!connection) {
-          throw util.ESP32Error.noConnection();
-        }
-        const data = await connection.exec('webrepl.start()');
-        const wsurl = data.match(/ws:\/\/\d+\.\d+\.\d+\.\d+:\d+/)?.toString();
-        // TODO: remove commented commands
-        if (!wsurl || /0\.0\.0\.0/.test(wsurl)) {
-          vscode.window.showErrorMessage('here');
-          throw new Error(
-            'WebSocket is NOT open and the configuration is not saved!',
-          );
+        const wsurl = await getWebSocketURL();
+        if (!wsurl) {
+          return;
         }
         esp32Fs.writeFile(vscode.Uri.file('boot.py'), Buffer.from(content), {
           create: true,
@@ -369,11 +361,33 @@ export function activate(context: vscode.ExtensionContext) {
           append: true,
         });
         _saveJSON(name, wsurl, password as string);
-        vscode.window.showInformationMessage(`URL: ${wsurl}`);
-        vscode.window.showInformationMessage('Configure WebREPL successfully!');
+        vscode.window.showInformationMessage('Configure WebREPL successfully.');
       }, 3000);
     } catch (err: any) {
       vscode.window.showErrorMessage(err.message);
+    }
+  };
+
+  /**
+   * Get the URL of the WebSocket where the WebREPL is listening.
+   * @returns The URL of the WebSocket.
+   */
+  const getWebSocketURL: () => Promise<string> = async () => {
+    try {
+      if (!connection) {
+        throw util.ESP32Error.noConnection();
+      }
+      const wsurl = (await connection.exec('webrepl.start()'))
+        .match(/ws:\/\/\d+\.\d+\.\d+\.\d+:\d+/)
+        ?.toString();
+      if (!wsurl || /\/0\.0\.0\.0:/.test(wsurl)) {
+        throw new Error('WebSocket is not started.');
+      }
+      vscode.window.showInformationMessage(`URL: ${wsurl}`);
+      return wsurl;
+    } catch (err: any) {
+      vscode.window.showErrorMessage(err.message);
+      return '';
     }
   };
 
@@ -403,6 +417,10 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand(
       'micropython-esp32.configWebREPL',
       configWebREPL,
+    ),
+    vscode.commands.registerCommand(
+      'micropython-esp32.getWebSocketURL',
+      getWebSocketURL,
     ),
     vscode.workspace.registerFileSystemProvider('esp32fs', esp32Fs, {
       isCaseSensitive: true,

@@ -89,7 +89,7 @@ export default class WebSock implements Port {
       await util.sleep(1);
     }
     if (this._socket.readyState !== 1) {
-      throw new Error('WebSocket断开失败');
+      throw new Error('Failed to close WebSocket.');
     }
     console.log('websock close');
   }

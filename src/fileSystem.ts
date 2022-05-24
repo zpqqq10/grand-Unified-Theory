@@ -46,8 +46,8 @@ export default class ESP32FS implements vscode.FileSystemProvider {
     return data
       .trim()
       .split('\r\n')
-      .filter((str) => str)
-      .map((file) => {
+      .filter(str => str)
+      .map(file => {
         const stat = file.split('/');
         return [
           stat[0],
@@ -112,7 +112,7 @@ export default class ESP32FS implements vscode.FileSystemProvider {
         location: vscode.ProgressLocation.Notification,
         title: 'Saving file on the board',
       },
-      (progress) => {
+      progress => {
         if (!connection) {
           throw util.ESP32Error.noConnection();
         }
@@ -126,12 +126,12 @@ export default class ESP32FS implements vscode.FileSystemProvider {
           for (
             let data = content.toString().replace(/\r/g, ''), { length } = data;
             data;
-            data = data.slice(200)
+            data = data.slice(128)
           ) {
             await connection.dangerouslyExec(
-              `w(b${JSON.stringify(data.slice(0, 200))})`,
+              `w(b${JSON.stringify(data.slice(0, 128))})`,
             );
-            progress.report({ increment: 20000 / length });
+            progress.report({ increment: 12800 / length });
           }
           await connection.dangerouslyExec(`f.close()`);
         });

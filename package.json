@@ -56,6 +56,11 @@
         "command": "micropython-esp32.configWebREPL",
         "title": "Configure WebREPL with Serial Port Connected",
         "category": "MicroPython-ESP32"
+      },
+      {
+        "command": "micropython-esp32.getWebSocketURL",
+        "title": "Get WebSocket URL",
+        "category": "MicroPython-ESP32"
       }
     ],
     "configuration": [
@@ -92,13 +97,13 @@
             "description": "Specifies the password of the WebREPL.",
             "order": 21
           },
-          "micropython-esp32.connection.websock.net": {
+          "micropython-esp32.connection.websock.lanName": {
             "type": "string",
             "default": "",
             "description": "Specifies the network that PC and ESP32 both connect to.",
             "order": 22
           },
-          "micropython-esp32.connection.websock.netpw": {
+          "micropython-esp32.connection.websock.lanPassword": {
             "type": "string",
             "default": "",
             "description": "Specifies the password of the network that PC and ESP32 both connect to.",
@@ -139,6 +144,10 @@
         {
           "command": "micropython-esp32.configWebREPL",
           "when": "workbenchState == workspace && micropython-esp32.connected && micropython-esp32.connectionType == serial"
+        },
+        {
+          "command": "micropython-esp32.getWebSocketURL",
+          "when": "workbenchState == workspace && micropython-esp32.connected && micropython-esp32.connectionType == serial"
         }
       ],
       "editor/title": [
@@ -174,6 +183,6 @@
   },
   "dependencies": {
     "serialport": "^10.4.0",
-    "ws": "^6.0.0"
+    "ws": "^8.6.0"
   }
 }

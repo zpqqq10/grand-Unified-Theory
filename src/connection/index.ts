@@ -90,20 +90,17 @@ export default class Connection {
   /**
    * Execute Python code on the board without locking.
    * @param code The code to execute.
-   * @param readCallback The port read callback.
+   * @param onRead The port read callback.
    * @returns The execution result.
    */
-  async dangerouslyExec(
-    code: string,
-    readCallback?: ReadCallback,
-  ): Promise<string> {
+  async dangerouslyExec(code: string, onRead?: ReadCallback): Promise<string> {
     let data = '';
     let err = '';
     if (code) {
       await this._readUntil('>', 500);
       await this._port.write(`${code}\x04`);
       await this._readUntil('OK', 500);
-      readCallback && readCallback('');
+      onRead && onRead('');
       for (let i = 0; i < 2; i++) {
         for (;;) {
           const s = await this._port.read(1);
@@ -111,7 +108,7 @@ export default class Connection {
             break;
           }
           i ? (err += s) : (data += s);
-          readCallback && readCallback(s);
+          onRead && onRead(s);
         }
       }
     }
@@ -124,11 +121,11 @@ export default class Connection {
   /**
    * Execute Python code on the board.
    * @param code The code to execute.
-   * @param readCallback The port read callback.
+   * @param onRead The port read callback.
    * @returns The execution result.
    */
-  exec(code: string, readCallback?: ReadCallback): Promise<string> {
-    return this.lock(() => this.dangerouslyExec(code, readCallback));
+  exec(code: string, onRead?: ReadCallback): Promise<string> {
+    return this.lock(() => this.dangerouslyExec(code, onRead));
   }
 
   /**
@@ -198,8 +195,8 @@ export default class Connection {
 
 export let connection: Connection | undefined = undefined;
 
-export const setConnection: (newConnection: Connection | undefined) => void = (
-  newConnection,
-) => {
+export const setConnection: (
+  newConnection: Connection | undefined,
+) => void = newConnection => {
   connection = newConnection;
 };

@@ -1,28 +1,12 @@
 import * as vscode from 'vscode';
-import Connection, { setConnection } from './connection';
-import { ErrorEvent } from 'ws';
-import { connection } from './connection';
+import { OpenCallback, ErrorCallback } from './connection/port';
+import Connection, { connection, setConnection } from './connection';
 import { statusBarItem } from './extension';
 
 /**
- * The error handler for connection.
+ * The connection open callback.
  */
-const onError: (err: Error | ErrorEvent) => void = (err) => {
-  vscode.window.showErrorMessage(err.message);
-  vscode.commands.executeCommand(
-    'setContext',
-    'micropython-esp32.connected',
-    false,
-  );
-  setConnection(undefined);
-};
-
-/**
-* Init Serial/WebSocket Port.
-* Require user to input URL and WebREPL password.
-* @returns The connection if successfully created, or `undefined` otherwise.
-*/
-const portInitFunc: () => Promise<void> = async () => {
+const onOpen: OpenCallback = async () => {
   if (!connection) {
     return;
   }
@@ -40,14 +24,28 @@ const portInitFunc: () => Promise<void> = async () => {
   );
 };
 
+/**
+ * The connection error callback.
+ */
+const onError: ErrorCallback = err => {
+  vscode.window.showErrorMessage(err.message);
+  setConnection(undefined);
+  statusBarItem.text = 'Disconnected';
+  vscode.commands.executeCommand(
+    'setContext',
+    'micropython-esp32.connected',
+    false,
+  );
+};
+
 export class ESP32Connection {
   static serial(path: string, baudRate: string): Connection {
     return new Connection({
       type: 'serial',
       path,
       baudRate,
+      onOpen,
       onError,
-      init: portInitFunc,
     });
   }
 
@@ -56,8 +54,8 @@ export class ESP32Connection {
       type: 'websock',
       url,
       password,
+      onOpen,
       onError,
-      init: portInitFunc,
     });
   }
 }
@@ -80,5 +78,5 @@ export class ESP32Error {
   }
 }
 
-export const sleep: (ms: number) => Promise<void> = (ms) =>
-  new Promise((resolve) => setTimeout(resolve, ms));
+export const sleep: (ms: number) => Promise<void> = ms =>
+  new Promise(resolve => setTimeout(resolve, ms));

@@ -1,47 +1,48 @@
-import Port from './port';
-import WebSocket, { ErrorEvent } from 'ws';
+import * as WebSocket from 'ws';
+import Port, { Options } from './port';
 import * as util from '../util';
-import * as vscode from 'vscode';
-import { connection } from '.';
-import { statusBarItem } from '../extension';
 
-export interface WebSockOptions {
+export interface WebSockOptions extends Options {
   type: 'websock';
   url: string;
   password: string;
-  onError: (err: Error | ErrorEvent) => void;
-  init: () => Promise<void>;
 }
 
 export default class WebSock implements Port {
   private _socket: WebSocket;
+  private _status: 'disconnected' | 'connecting' | 'connected';
   private _receiveData: string;
   readonly address: string;
 
-  constructor(options: WebSockOptions) {  // 建立登录的连接
+  constructor(options: WebSockOptions) {
+    // 建立登录的连接
     this._socket = new WebSocket(options.url);
-    this._receiveData = "";
-    this.address = options.url;
-
     this._socket.onopen = async () => {
       console.log('WebSocket成功连接');
     };
-
-    this._socket.onmessage = async (msg) => {
+    this._socket.onmessage = async msg => {
       console.log('接收到来自ESP32的消息：');
       console.log(msg.data);
-      if (msg.data.toString() === "Password: ") {
-        this._socket.send(options.password);
-        this._socket.send('\r\n');
-      }
-      else if (msg.data.toString() === '\r\nWebREPL connected\r\n>>> ') {
-        await options.init();
-      }
-      else {
-        this._receiveData = this._receiveData.concat(msg.data.toString());
+      if (
+        this._status === 'disconnected' &&
+        msg.data.toString() === 'Password: '
+      ) {
+        this._socket.send(`${options.password}\r\n`);
+        this._status = 'connecting';
+      } else if (
+        this._status === 'connecting' &&
+        msg.data.toString() === '\r\nWebREPL connected\r\n>>> '
+      ) {
+        options.onOpen();
+        this._status = 'connected';
+      } else if (this._status === 'connected') {
+        this._receiveData += msg.data.toString();
       }
     };
     this._socket.onerror = options.onError;
+    this._status = 'disconnected';
+    this._receiveData = '';
+    this.address = options.url;
   }
 
   get readableLength(): number {
@@ -49,12 +50,9 @@ export default class WebSock implements Port {
   }
 
   async read(size: number, timeout?: number): Promise<string> {
-    for(;;) {
-      if (size <= 0) {
-        return "";
-      }
+    for (;;) {
       if (this._receiveData.length >= size) {
-        let tmpData = this._receiveData.slice(0, size);
+        const tmpData = this._receiveData.slice(0, size);
         this._receiveData = this._receiveData.slice(size);
         return tmpData;
       }
@@ -67,31 +65,32 @@ export default class WebSock implements Port {
 
   write(data: string): Promise<void> {
     return new Promise((resolve, reject) => {
-      this._socket.send(data, {
-        binary: false,
-        mask: false
-      },
-      function(err) {
-        reject(err);
-      });
-      console.log('Websocket write', data);
-      resolve();
+      this._socket.send(
+        data,
+        {
+          binary: false,
+          mask: false,
+        },
+        err => {
+          if (err) {
+            reject(err);
+          } else {
+            console.log('websock write', data);
+            resolve();
+          }
+        },
+      );
     });
   }
 
-  close(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      this._socket.close();
-      while(this._socket.readyState === 2) {
-        util.sleep(1);
-      }
-      if(this._socket.readyState === 1) {
-        console.log('WebSocket成功断开');
-        resolve();
-      }
-      else {
-        reject('WebSocket断开失败');
-      }
-    });
+  async close(): Promise<void> {
+    this._socket.close();
+    for (; this._socket.readyState === 2; ) {
+      await util.sleep(1);
+    }
+    if (this._socket.readyState !== 1) {
+      throw new Error('WebSocket断开失败');
+    }
+    console.log('websock close');
   }
 }

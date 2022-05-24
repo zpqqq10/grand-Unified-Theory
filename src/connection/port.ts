@@ -1,3 +1,19 @@
+import { ErrorEvent } from 'ws';
+
+export interface OpenCallback {
+  (): void;
+}
+
+export interface ErrorCallback {
+  (err: Error | ErrorEvent): void;
+}
+
+export interface Options {
+  type: string;
+  onOpen: OpenCallback;
+  onError: ErrorCallback;
+}
+
 export default interface Port {
   /**
    * The address of the connected port.

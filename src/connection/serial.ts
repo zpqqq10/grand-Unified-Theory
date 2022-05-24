@@ -1,14 +1,11 @@
-import Port from './port';
-import { ErrorEvent } from 'ws';
 import { SerialPort } from 'serialport';
+import Port, { Options } from './port';
 import * as util from '../util';
 
-export interface SerialOptions {
+export interface SerialOptions extends Options {
   type: 'serial';
   path: string;
   baudRate: string;
-  onError: (err: Error | ErrorEvent) => void;
-  init: () => Promise<void>;
 }
 
 export default class Serial implements Port {
@@ -16,10 +13,13 @@ export default class Serial implements Port {
   readonly address: string;
 
   constructor(options: SerialOptions) {
-    this._serialport = new SerialPort({
-      path: options.path,
-      baudRate: parseInt(options.baudRate),
-    }, options.init);
+    this._serialport = new SerialPort(
+      {
+        path: options.path,
+        baudRate: parseInt(options.baudRate),
+      },
+      options.onOpen,
+    );
     this._serialport.setEncoding('utf8');
     this._serialport.on('error', options.onError);
     this.address = `${options.path}, baud rate ${options.baudRate}`;
@@ -45,7 +45,7 @@ export default class Serial implements Port {
   write(data: string): Promise<void> {
     return new Promise((resolve, reject) => {
       this._serialport.write(data);
-      this._serialport.drain((err) => {
+      this._serialport.drain(err => {
         if (err) {
           reject(err);
         } else {
@@ -58,7 +58,7 @@ export default class Serial implements Port {
 
   close(): Promise<void> {
     return new Promise((resolve, reject) => {
-      this._serialport.close((err) => {
+      this._serialport.close(err => {
         if (err) {
           reject(err);
         } else {

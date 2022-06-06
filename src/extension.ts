@@ -377,7 +377,7 @@ export function activate(context: vscode.ExtensionContext) {
       if (!connection) {
         throw util.ESP32Error.noConnection();
       }
-      const wsurl = (await connection.exec('webrepl.start()'))
+      const wsurl = (await connection.exec('import webrepl\nwebrepl.start()'))
         .match(/ws:\/\/\d+\.\d+\.\d+\.\d+:\d+/)
         ?.toString();
       if (!wsurl || /\/0\.0\.0\.0:/.test(wsurl)) {

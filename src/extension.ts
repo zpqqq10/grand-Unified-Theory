@@ -346,8 +346,8 @@ export function activate(context: vscode.ExtensionContext) {
       }
       // connect to the LAN first
       const lan = `'${lanName}','${lanPassword}'`;
-      const connectWLAN = `\nimport network\nw=network.WLAN(network.STA_IF)\nw.active(True)\nif w.isconnected():\n w.disconnect()\nw.connect(${lan})\nimport webrepl`;
-      const content = `${connectWLAN}\nimport time\nt=9\nwhile t>0:\n if w.isconnected():\n  webrepl.start()\n  break\n t=t-1\n time.sleep_ms(500)\n`;
+      const connectWLAN = `\nimport network\nw=network.WLAN(network.STA_IF)\nw.active(True)\nif w.isconnected():\n w.disconnect()\nw.connect(${lan})`;
+      const content = `${connectWLAN}\nimport webrepl\nimport time\nt=9\nwhile t>0:\n if w.isconnected():\n  webrepl.start()\n  break\n t=t-1\n time.sleep_ms(500)\n`;
       await connection.exec(connectWLAN);
       // waiting for connecting
       setTimeout(async () => {

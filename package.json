@@ -14,6 +14,8 @@
     "onCommand:micropython-esp32.connect",
     "onCommand:micropython-esp32.executeCommand",
     "onCommand:micropython-esp32.executeFile",
+    "onCommand:micropython-esp32.openTerminal",
+    "onCommand:micropython-esp32.reboot",
     "onCommand:micropython-esp32.disconnect",
     "onCommand:micropython-esp32.configWebREPL",
     "onFileSystem:esp32fs"
@@ -46,6 +48,16 @@
         "title": "Execute Python File",
         "category": "MicroPython-ESP32",
         "icon": "$(play)"
+      },
+      {
+        "command": "micropython-esp32.openTerminal",
+        "title": "Open Terminal",
+        "category": "MicroPython-ESP32"
+      },
+      {
+        "command": "micropython-esp32.reboot",
+        "title": "Reboot ESP32",
+        "category": "MicroPython-ESP32"
       },
       {
         "command": "micropython-esp32.disconnect",
@@ -136,6 +148,14 @@
         {
           "command": "micropython-esp32.executeFile",
           "when": "workbenchState == workspace && micropython-esp32.connected && resourceLangId == python"
+        },
+        {
+          "command": "micropython-esp32.openTerminal",
+          "when": "workbenchState == workspace && micropython-esp32.connected"
+        },
+        {
+          "command": "micropython-esp32.reboot",
+          "when": "workbenchState == workspace && micropython-esp32.connected"
         },
         {
           "command": "micropython-esp32.disconnect",

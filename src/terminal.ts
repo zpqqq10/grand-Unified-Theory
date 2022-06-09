@@ -2,16 +2,20 @@ import * as vscode from 'vscode';
 import { connection } from './connection';
 import * as util from './util';
 
+export interface TerminalOptions {
+  code?: string;
+  isFile?: boolean;
+  isREPL?: boolean;
+}
+
 export default class ESP32Pty implements vscode.Pseudoterminal {
-  private _code: string;
-  private _isFile: boolean;
+  private _options: TerminalOptions;
   private _finished: boolean = true;
   private _emitter = new vscode.EventEmitter<string>();
   readonly onDidWrite: vscode.Event<string> = this._emitter.event;
 
-  constructor(code: string, isFile: boolean) {
-    this._code = code;
-    this._isFile = isFile;
+  constructor(options: TerminalOptions) {
+    this._options = options;
   }
 
   async open(
@@ -20,14 +24,20 @@ export default class ESP32Pty implements vscode.Pseudoterminal {
     if (!connection) {
       throw util.ESP32Error.noConnection();
     }
-    if (!this._isFile) {
-      this._emitter.fire(`> ${this._code}\r\n`);
+    const { code = '', isFile, isREPL } = this._options;
+    if (!isFile && !isREPL) {
+      this._emitter.fire(`> ${code}\r\n`);
     }
+    const onRead = (data: string) => {
+      this._finished = false;
+      this._emitter.fire(data);
+    };
     try {
-      await connection.exec(this._code, (data: string) => {
-        this._finished = false;
-        this._emitter.fire(data);
-      });
+      if (isREPL) {
+        await connection.startREPL(onRead);
+      } else {
+        await connection.exec(code, { onRead });
+      }
     } catch {}
     this._finished = true;
     this._emitter.fire('> Finished <');
@@ -39,6 +49,9 @@ export default class ESP32Pty implements vscode.Pseudoterminal {
     }
     if (!connection) {
       throw util.ESP32Error.noConnection();
+    }
+    if (this._options.isREPL) {
+      connection.stopREPL();
     }
     for (; !this._finished; ) {
       await connection.dangerouslyWrite('\x03\x03');

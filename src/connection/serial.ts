@@ -1,8 +1,8 @@
 import { SerialPort } from 'serialport';
-import Port, { Options } from './port';
+import Port, { PortOptions } from './port';
 import * as util from '../util';
 
-export interface SerialOptions extends Options {
+export interface SerialOptions extends PortOptions {
   type: 'serial';
   path: string;
   baudRate: string;

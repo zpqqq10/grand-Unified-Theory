@@ -8,7 +8,7 @@ export interface ErrorCallback {
   (err: Error | ErrorEvent): void;
 }
 
-export interface Options {
+export interface PortOptions {
   type: string;
   onOpen: OpenCallback;
   onError: ErrorCallback;

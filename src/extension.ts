@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import Connection, { connection, setConnection } from './connection';
 import ESP32FS from './fileSystem';
-import ESP32Pty from './terminal';
+import ESP32Pty, { TerminalOptions } from './terminal';
 import * as util from './util';
 
 /**
@@ -165,21 +165,16 @@ export function activate(context: vscode.ExtensionContext) {
 
   /**
    * Execute Python code.
-   * @param code The code to execute.
-   * @param isFile Specify whether the code is from a file.
-   *               If not, it will be displayed in the terminal.
+   * @param options Terminal options.
    * @throws noConnection
    */
-  const _executePython: (code: string, isFile: boolean) => void = (
-    code,
-    isFile,
-  ) => {
+  const _executePython: (options: TerminalOptions) => void = options => {
     if (!connection) {
       throw util.ESP32Error.noConnection();
     }
     const terminal = vscode.window.createTerminal({
       name: 'MicroPython-ESP32',
-      pty: new ESP32Pty(code, isFile),
+      pty: new ESP32Pty(options),
     });
     terminal.show();
     context.subscriptions.push(terminal);
@@ -197,7 +192,7 @@ export function activate(context: vscode.ExtensionContext) {
       if (!command) {
         return;
       }
-      _executePython(command, false);
+      _executePython({ code: command });
     } catch (err: any) {
       vscode.window.showErrorMessage(err.message);
     }
@@ -209,7 +204,50 @@ export function activate(context: vscode.ExtensionContext) {
    */
   const executeFile: (textEditor: vscode.TextEditor) => void = textEditor => {
     try {
-      _executePython(textEditor.document.getText(), true);
+      _executePython({ code: textEditor.document.getText(), isFile: true });
+    } catch (err: any) {
+      vscode.window.showErrorMessage(err.message);
+    }
+  };
+
+  /**
+   * Open ESP32 Terminal.
+   */
+  const openTerminal: () => void = () => {
+    try {
+      _executePython({ isREPL: true });
+    } catch (err: any) {
+      vscode.window.showErrorMessage(err.message);
+    }
+  };
+
+  /**
+   * Reboot the board.
+   */
+  const reboot: () => Promise<void> = async () => {
+    try {
+      if (!connection) {
+        throw util.ESP32Error.noConnection();
+      }
+      await connection.dangerouslyWrite('import machine\nmachine.reset()\x04');
+      await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: 'Rebooting',
+        },
+        progress =>
+          new Promise<void>(resolve => {
+            setTimeout(async () => {
+              if (!connection) {
+                throw util.ESP32Error.noConnection();
+              }
+              progress.report({ increment: 50 });
+              await connection.init(); // this is a wrong! how to do this properly?
+              progress.report({ increment: 50 });
+              resolve();
+            }, 3000);
+          }),
+      );
     } catch (err: any) {
       vscode.window.showErrorMessage(err.message);
     }
@@ -346,9 +384,9 @@ export function activate(context: vscode.ExtensionContext) {
       }
       // connect to the LAN first
       const lan = `'${lanName}','${lanPassword}'`;
-      const connectWLAN = `\nimport network\nw=network.WLAN(network.STA_IF)\nw.active(True)\nif w.isconnected():\n w.disconnect()\nw.connect(${lan})\nimport webrepl`;
-      const content = `${connectWLAN}\nimport time\nt=9\nwhile t>0:\n if w.isconnected():\n  webrepl.start()\n  break\n t=t-1\n time.sleep_ms(500)\n`;
-      await connection.exec(connectWLAN);
+      const connectWLAN = `\nimport network\nw=network.WLAN(network.STA_IF)\nw.active(True)\nif w.isconnected():\n w.disconnect()\nw.connect(${lan})`;
+      const content = `${connectWLAN}\nimport webrepl\nimport time\nt=9\nwhile t>0:\n if w.isconnected():\n  webrepl.start()\n  break\n t=t-1\n time.sleep_ms(500)\n`;
+      await connection.exec(connectWLAN, { timeout: 10000 });
       // waiting for connecting
       setTimeout(async () => {
         const wsurl = await getWebSocketURL();
@@ -377,7 +415,11 @@ export function activate(context: vscode.ExtensionContext) {
       if (!connection) {
         throw util.ESP32Error.noConnection();
       }
-      const wsurl = (await connection.exec('webrepl.start()'))
+      const wsurl = (
+        await connection.exec('import webrepl\nwebrepl.start()', {
+          timeout: 10000,
+        })
+      )
         .match(/ws:\/\/\d+\.\d+\.\d+\.\d+:\d+/)
         ?.toString();
       if (!wsurl || /\/0\.0\.0\.0:/.test(wsurl)) {
@@ -413,6 +455,11 @@ export function activate(context: vscode.ExtensionContext) {
       'micropython-esp32.executeFile',
       executeFile,
     ),
+    vscode.commands.registerCommand(
+      'micropython-esp32.openTerminal',
+      openTerminal,
+    ),
+    vscode.commands.registerCommand('micropython-esp32.reboot', reboot),
     vscode.commands.registerCommand('micropython-esp32.disconnect', disconnect),
     vscode.commands.registerCommand(
       'micropython-esp32.configWebREPL',

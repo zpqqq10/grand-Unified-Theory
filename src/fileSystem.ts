@@ -23,6 +23,7 @@ export default class ESP32FS implements vscode.FileSystemProvider {
     }
     const data = await connection.exec(
       `f=os.stat('${uri.path}')\nprint('{}/{}/{}/{}'.format('f'if f[0]&0x8000 else'd',f[9],f[8],f[6]))`,
+      { timeout: 10000 },
     );
     const stat = data.trim().split('/');
     return {
@@ -42,6 +43,7 @@ export default class ESP32FS implements vscode.FileSystemProvider {
     }
     const data = await connection.exec(
       `for f in os.ilistdir('${uri.path}'):\n print('{}/{}'.format(f[0],'f'if f[1]&0x8000 else'd'))`,
+      { timeout: 10000 },
     );
     return data
       .trim()
@@ -67,7 +69,7 @@ export default class ESP32FS implements vscode.FileSystemProvider {
     if (stat) {
       throw vscode.FileSystemError.FileExists(uri);
     }
-    await connection.exec(`os.mkdir('${uri.path}')`);
+    await connection.exec(`os.mkdir('${uri.path}')`, { timeout: 10000 });
     this._emitter.fire([{ type: vscode.FileChangeType.Created, uri }]);
   }
 
@@ -122,6 +124,7 @@ export default class ESP32FS implements vscode.FileSystemProvider {
           }
           await connection.dangerouslyExec(
             `f=open('${uri.path}','${options.append ? 'a' : 'w'}b')\nw=f.write`,
+            { timeout: 10000 },
           );
           for (
             let data = content.toString().replace(/\r/g, ''), { length } = data;
@@ -130,10 +133,11 @@ export default class ESP32FS implements vscode.FileSystemProvider {
           ) {
             await connection.dangerouslyExec(
               `w(b${JSON.stringify(data.slice(0, 128))})`,
+              { timeout: 10000 },
             );
             progress.report({ increment: 12800 / length });
           }
-          await connection.dangerouslyExec(`f.close()`);
+          await connection.dangerouslyExec('f.close()', { timeout: 10000 });
         });
       },
     );
@@ -151,7 +155,7 @@ export default class ESP32FS implements vscode.FileSystemProvider {
       throw util.ESP32Error.noConnection();
     }
     if ((await this.stat(uri)).type !== vscode.FileType.Directory) {
-      await connection.exec(`os.remove('${uri.path}')`);
+      await connection.exec(`os.remove('${uri.path}')`, { timeout: 10000 });
     } else {
       if (!options.recursive) {
         throw vscode.FileSystemError.FileIsADirectory(uri);
@@ -162,7 +166,7 @@ export default class ESP32FS implements vscode.FileSystemProvider {
           recursive: true,
         });
       }
-      await connection.exec(`os.rmdir('${uri.path}')`);
+      await connection.exec(`os.rmdir('${uri.path}')`, { timeout: 10000 });
     }
     this._emitter.fire([{ type: vscode.FileChangeType.Deleted, uri }]);
   }
@@ -182,7 +186,9 @@ export default class ESP32FS implements vscode.FileSystemProvider {
     if (stat && !options.overwrite) {
       throw vscode.FileSystemError.FileExists(newUri);
     }
-    await connection.exec(`os.rename('${oldUri.path}','${newUri.path}')`);
+    await connection.exec(`os.rename('${oldUri.path}','${newUri.path}')`, {
+      timeout: 10000,
+    });
     this._emitter.fire([
       { type: vscode.FileChangeType.Deleted, uri: oldUri },
       { type: vscode.FileChangeType.Created, uri: newUri },

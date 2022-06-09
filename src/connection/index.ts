@@ -11,7 +11,9 @@ interface ReadCallback {
 
 export default class Connection {
   private _port: Port;
+  private _initialized: boolean = false;
   private _locking: boolean = false;
+  private _replStopped: boolean = false;
   readonly type: string;
 
   constructor(options: ConnectionOptions) {
@@ -83,32 +85,40 @@ export default class Connection {
           break;
         } catch {}
       }
-      await this.dangerouslyExec('import os');
+      this._initialized = true;
+      await this.dangerouslyExec('import os', { timeout: 10000 });
     });
   }
 
   /**
    * Execute Python code on the board without locking.
    * @param code The code to execute.
+   * @param timeout The time limit of one-byte read.
    * @param onRead The port read callback.
    * @returns The execution result.
    */
-  async dangerouslyExec(code: string, onRead?: ReadCallback): Promise<string> {
+  async dangerouslyExec(
+    code: string,
+    options: { timeout?: number; onRead?: ReadCallback },
+  ): Promise<string> {
+    if (!this._initialized) {
+      throw util.ESP32Error.noConnection();
+    }
     let data = '';
     let err = '';
     if (code) {
       await this._readUntil('>', 500);
       await this._port.write(`${code}\x04`);
       await this._readUntil('OK', 500);
-      onRead && onRead('');
+      options?.onRead?.('');
       for (let i = 0; i < 2; i++) {
         for (;;) {
-          const s = await this._port.read(1);
+          const s = await this._port.read(1, options?.timeout);
           if (s === '\x04') {
             break;
           }
           i ? (err += s) : (data += s);
-          onRead && onRead(s);
+          options?.onRead?.(s);
         }
       }
     }
@@ -121,11 +131,18 @@ export default class Connection {
   /**
    * Execute Python code on the board.
    * @param code The code to execute.
+   * @param timeout The time limit of one-byte read.
    * @param onRead The port read callback.
    * @returns The execution result.
    */
-  exec(code: string, onRead?: ReadCallback): Promise<string> {
-    return this.lock(() => this.dangerouslyExec(code, onRead));
+  exec(
+    code: string,
+    options: { timeout?: number; onRead?: ReadCallback },
+  ): Promise<string> {
+    if (!this._initialized) {
+      throw util.ESP32Error.noConnection();
+    }
+    return this.lock(() => this.dangerouslyExec(code, options));
   }
 
   /**
@@ -134,7 +151,25 @@ export default class Connection {
    * @returns The evaluation result.
    */
   eval(expression: string): Promise<string> {
-    return this.exec(`print(${expression},end='')`);
+    return this.exec(`print(${expression},end='')`, { timeout: 10000 });
+  }
+
+  startREPL(onRead: ReadCallback): Promise<void> {
+    return this.lock(async () => {
+      await this._port.write('\x02');
+      await this._readUntil('Type "help()" for more information.\r\n', 500);
+      onRead('');
+      for (this._replStopped = false; !this._replStopped; ) {
+        const s = await this._port.read(1);
+        onRead(s);
+      }
+      await this._port.write('\x01');
+      await this._readUntil('raw REPL; CTRL-B to exit\r\n', 500);
+    });
+  }
+
+  stopREPL(): void {
+    this._replStopped = true;
   }
 
   /**

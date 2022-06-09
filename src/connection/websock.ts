@@ -1,8 +1,8 @@
 import * as WebSocket from 'ws';
-import Port, { Options } from './port';
+import Port, { PortOptions } from './port';
 import * as util from '../util';
 
-export interface WebSockOptions extends Options {
+export interface WebSockOptions extends PortOptions {
   type: 'websock';
   url: string;
   password: string;

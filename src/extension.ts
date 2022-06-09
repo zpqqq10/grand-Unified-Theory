@@ -386,7 +386,9 @@ export function activate(context: vscode.ExtensionContext) {
       const lan = `'${lanName}','${lanPassword}'`;
       const connectWLAN = `\nimport network\nw=network.WLAN(network.STA_IF)\nw.active(True)\nif w.isconnected():\n w.disconnect()\nw.connect(${lan})`;
       const content = `${connectWLAN}\nimport webrepl\nimport time\nt=9\nwhile t>0:\n if w.isconnected():\n  webrepl.start()\n  break\n t=t-1\n time.sleep_ms(500)\n`;
-      await connection.exec(connectWLAN, { timeout: 10000 });
+      await connection.exec(connectWLAN, {
+        timeout: 10000,
+      });
       // waiting for connecting
       setTimeout(async () => {
         const wsurl = await getWebSocketURL();
